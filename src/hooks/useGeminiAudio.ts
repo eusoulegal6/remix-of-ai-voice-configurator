@@ -1,42 +1,11 @@
 import { useState, useRef, useCallback } from "react";
 
-function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(float32Array.length * 2);
-  const view = new DataView(buffer);
-  let offset = 0;
-  for (let i = 0; i < float32Array.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, float32Array[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return buffer;
-}
-
-function base64EncodeAudio(buffer: ArrayBuffer): Promise<string | null> {
-  return new Promise((resolve) => {
-    const blob = new Blob([buffer], { type: "audio/pcm;rate=16000" });
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      if (typeof reader.result !== "string") {
-        resolve(null);
-        return;
-      }
-
-      const base64Data = reader.result.split(",")[1] ?? null;
-      resolve(base64Data);
-    };
-
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
-}
-
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
 interface LogEntry {
   timestamp: Date;
   message: string;
-  type: "info" | "error" | "audio";
+  type: "info" | "error";
 }
 
 interface UseGeminiAudioOptions {
@@ -47,23 +16,9 @@ interface UseGeminiAudioOptions {
 export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOptions) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isMicMuted, setIsMicMuted] = useState(true);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const playbackCtxRef = useRef<AudioContext | null>(null);
-  const nextPlayTimeRef = useRef<number>(0);
   const connectTimeoutRef = useRef<number | null>(null);
-  const streamReadyTimeoutRef = useRef<number | null>(null);
-  const isReadyToStreamRef = useRef(false);
-  const isEncodingAudioRef = useRef(false);
-  const isMicMutedRef = useRef(true);
-
-  // Keep ref in sync with state
-  isMicMutedRef.current = isMicMuted;
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -76,13 +31,6 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     }
   }, []);
 
-  const clearStreamReadyTimeout = useCallback(() => {
-    if (streamReadyTimeoutRef.current !== null) {
-      window.clearTimeout(streamReadyTimeoutRef.current);
-      streamReadyTimeoutRef.current = null;
-    }
-  }, []);
-
   const describeCloseEvent = useCallback((event: CloseEvent) => {
     return `WebSocket closed (code: ${event.code}, reason: ${event.reason || "none"}, clean: ${event.wasClean})`;
   }, []);
@@ -92,63 +40,33 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     return `WebSocket error (readyState: ${targetState})`;
   }, []);
 
-  const playAudioChunk = useCallback((base64Data: string) => {
-    try {
-      if (!playbackCtxRef.current) {
-        playbackCtxRef.current = new AudioContext({ sampleRate: 24000 });
-      }
-      const ctx = playbackCtxRef.current;
+  const sendStringifiedPayload = useCallback((stringifiedPayload: string) => {
+    const ws = wsRef.current;
 
-      const binaryStr = atob(base64Data);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
-
-      // Gemini returns 16-bit PCM at 24kHz
-      const pcm16 = new Int16Array(bytes.buffer);
-      const float32 = new Float32Array(pcm16.length);
-      for (let i = 0; i < pcm16.length; i++) {
-        float32[i] = pcm16[i] / 32768;
-      }
-
-      const audioBuffer = ctx.createBuffer(1, float32.length, 24000);
-      audioBuffer.getChannelData(0).set(float32);
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-
-      const now = ctx.currentTime;
-      const startTime = Math.max(now, nextPlayTimeRef.current);
-      source.start(startTime);
-      nextPlayTimeRef.current = startTime + audioBuffer.duration;
-    } catch (err) {
-      console.error("Audio playback error:", err);
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addLog("WebSocket is not open", "error");
+      return false;
     }
-  }, []);
 
-  const start = useCallback(async () => {
+    console.log("[WS →] Outgoing:", stringifiedPayload);
+    addLog(`[WS →] Outgoing: ${stringifiedPayload}`);
+    ws.send(stringifiedPayload);
+    return true;
+  }, [addLog]);
+
+  const connect = useCallback(() => {
     if (status !== "disconnected") return;
 
     setStatus("connecting");
     setLogs([]);
-    addLog("Requesting microphone access…");
+    addLog("Connecting to Gemini proxy…");
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      addLog("Microphone access granted");
-
-      // Capture audio context at 16kHz for Gemini input
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
-      audioContextRef.current = audioCtx;
-
-      // Build WebSocket URL to edge function from configured backend URL
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
       if (!baseUrl) {
         throw new Error("Backend URL is missing");
       }
+
       const wsUrl = `${baseUrl
         .replace(/^https:\/\//, "wss://")
         .replace(/^http:\/\//, "ws://")}/functions/v1/gemini-ws`;
@@ -184,24 +102,18 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
         try {
           const data = JSON.parse(textData);
 
-          // Log a summary of every incoming message for debugging
-          const msgKeys = Object.keys(data).join(", ");
-          addLog(`[WS ←] keys: ${msgKeys}${data.type ? ` | type=${data.type}` : ""}`, "info");
-
-          // Proxy error from backend
           if (data.type === "proxy_error") {
             addLog(`[Proxy Error] ${data.message} (code: ${data.code})`, "error");
             return;
           }
 
-          // Proxy ready → send setup message
           if (data.type === "proxy_ready") {
             addLog("Proxy ready, sending setup…");
-            const setupMsg = {
+            const setupPayload = {
               setup: {
                 model: `models/${model}`,
                 generationConfig: {
-                  responseModalities: ["AUDIO"],
+                  responseModalities: ["TEXT"],
                 },
                 ...(systemInstructions.trim()
                   ? {
@@ -212,58 +124,41 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
                   : {}),
               },
             };
-            ws.send(JSON.stringify(setupMsg));
-            addLog(`[WS →] Sent setup for model: models/${model}`);
+            const stringifiedPayload = JSON.stringify(setupPayload);
+            sendStringifiedPayload(stringifiedPayload);
             return;
           }
 
-          // Error from proxy
           if (data.type === "error") {
             addLog(`[Proxy] Error: ${data.message}`, "error");
             return;
           }
 
-          // Gemini closed
           if (data.type === "gemini_closed") {
             addLog(`[Gemini] Closed: code=${data.code} reason=${data.reason || "none"}`, "error");
             return;
           }
 
-          // Setup complete from Gemini
           if (data.setupComplete) {
-            addLog("[Gemini] Setup Complete received", "info");
+            addLog("[Gemini] Setup Complete received");
             setStatus("listening");
-            startAudioCapture(audioCtx, stream, ws);
-            clearStreamReadyTimeout();
-            isReadyToStreamRef.current = false;
-            addLog("[Mic] Stabilizing hardware for 500ms before streaming", "info");
-            streamReadyTimeoutRef.current = window.setTimeout(() => {
-              isReadyToStreamRef.current = true;
-              addLog("[Mic] Ready to stream audio", "info");
-            }, 500);
             return;
           }
 
-          // Gemini error payload
-          if (data.error) {
-            addLog(`[Gemini Error] ${JSON.stringify(data.error)}`, "error");
-            return;
+          const modelParts = data?.serverContent?.modelTurn?.parts;
+          if (Array.isArray(modelParts)) {
+            modelParts.forEach((part: { text?: string }) => {
+              if (part.text) {
+                addLog(`[Gemini] ${part.text}`);
+              }
+            });
           }
 
-          // Audio response from Gemini
-          const inlineData =
-            data?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
-          if (inlineData?.data) {
-            playAudioChunk(inlineData.data);
-            addLog("Received audio response", "audio");
-          }
-
-          // Turn complete
           if (data?.serverContent?.turnComplete) {
             addLog("Agent turn complete");
           }
-        } catch (parseErr) {
-          addLog(`[WS ←] JSON parse error (len=${textData.length}): ${textData.slice(0, 120)}`, "error");
+        } catch {
+          addLog(`[WS ←] ${textData}`);
         }
       };
 
@@ -275,6 +170,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
       ws.onclose = (event) => {
         clearConnectTimeout();
+        wsRef.current = null;
         addLog(describeCloseEvent(event), event.code === 1000 ? "info" : "error");
         setStatus("disconnected");
       };
@@ -283,99 +179,27 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       addLog(`Error: ${err.message}`, "error");
       setStatus("disconnected");
     }
-  }, [status, model, systemInstructions, addLog, playAudioChunk, clearConnectTimeout, clearStreamReadyTimeout, describeCloseEvent, describeErrorEvent]);
+  }, [status, model, systemInstructions, addLog, clearConnectTimeout, describeCloseEvent, describeErrorEvent, sendStringifiedPayload]);
 
-  const startAudioCapture = (
-    audioCtx: AudioContext,
-    stream: MediaStream,
-    ws: WebSocket
-  ) => {
-    const source = audioCtx.createMediaStreamSource(stream);
-    sourceRef.current = source;
-
-    // Buffer size 4096 at 16kHz ≈ 256ms chunks
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-    processorRef.current = processor;
-
-    processor.onaudioprocess = async (e) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      if (!isReadyToStreamRef.current) return;
-      if (isEncodingAudioRef.current) return;
-
-      const float32 = e.inputBuffer.getChannelData(0);
-      let isSilent = true;
-      for (let i = 0; i < float32.length; i++) {
-        if (float32[i] !== 0) {
-          isSilent = false;
-          break;
-        }
-      }
-
-      if (isSilent) return;
-
-      isEncodingAudioRef.current = true;
-
-      try {
-        const pcmBuffer = floatTo16BitPCM(float32);
-        const base64Data = await base64EncodeAudio(pcmBuffer);
-
-        if (!base64Data || /^=+$/.test(base64Data)) {
-          return;
-        }
-
-        const payload = {
-          realtimeInput: {
-            mediaChunks: [
-              {
-                mimeType: "audio/pcm;rate=16000",
-                data: base64Data,
-              },
-            ],
-          },
-        };
-
-        if (!isMicMutedRef.current && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(payload));
-        }
-      } finally {
-        isEncodingAudioRef.current = false;
-      }
-    };
-
-    source.connect(processor);
-    processor.connect(audioCtx.destination);
-  };
-
-  const stop = useCallback(() => {
+  const disconnect = useCallback(() => {
     clearConnectTimeout();
-    clearStreamReadyTimeout();
-    isReadyToStreamRef.current = false;
-    isEncodingAudioRef.current = false;
-    processorRef.current?.disconnect();
-    sourceRef.current?.disconnect();
-    audioContextRef.current?.close();
-    playbackCtxRef.current?.close();
-
-    streamRef.current?.getTracks().forEach((t) => t.stop());
     wsRef.current?.close();
-
-    processorRef.current = null;
-    sourceRef.current = null;
-    audioContextRef.current = null;
-    playbackCtxRef.current = null;
-    streamRef.current = null;
     wsRef.current = null;
-    nextPlayTimeRef.current = 0;
-
     setStatus("disconnected");
-    addLog("Conversation ended");
-  }, [addLog, clearConnectTimeout, clearStreamReadyTimeout]);
+    addLog("Disconnected");
+  }, [addLog, clearConnectTimeout]);
 
-  const sendTextTest = useCallback(() => {
+  const sendMessage = useCallback((rawMessageText: string) => {
     const ws = wsRef.current;
 
     if (!ws || ws.readyState !== WebSocket.OPEN || status !== "listening") {
-      addLog("Text test unavailable until the conversation is active", "error");
+      addLog("Message unavailable until the connection is active", "error");
+      return;
+    }
+
+    const messageText = rawMessageText.trim();
+    if (!messageText) {
+      addLog("Message cannot be empty", "error");
       return;
     }
 
@@ -384,16 +208,16 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
         turns: [
           {
             role: "user",
-            parts: [{ text: "Hello, this is a text isolation test. If you hear this, please say 'Test successful'." }],
+            parts: [{ text: messageText }],
           },
         ],
         turnComplete: true,
       },
     };
 
-    ws.send(JSON.stringify(payload));
-    addLog("Sent text isolation test", "info");
-  }, [addLog, status]);
+    const stringifiedPayload = JSON.stringify(payload);
+    sendStringifiedPayload(stringifiedPayload);
+  }, [addLog, sendStringifiedPayload, status]);
 
-  return { status, logs, start, stop, sendTextTest, isMicMuted, setIsMicMuted };
+  return { status, logs, connect, disconnect, sendMessage };
 }

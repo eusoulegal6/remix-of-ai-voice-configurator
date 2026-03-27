@@ -9,7 +9,7 @@ const Index = () => {
     systemInstructions: "",
   });
 
-  const { status, logs, start, stop, sendTextTest, isMicMuted, setIsMicMuted } = useGeminiAudio({
+  const { status, logs, connect, disconnect, sendMessage } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
   });
@@ -17,7 +17,13 @@ const Index = () => {
   return (
     <div className="flex min-h-screen">
       <ConfigPanel onApply={setConfig} />
-      <TestingArea status={status} logs={logs} onStart={start} onStop={stop} onSendTextTest={sendTextTest} isMicMuted={isMicMuted} onToggleMic={() => setIsMicMuted(prev => !prev)} />
+      <TestingArea
+        status={status}
+        logs={logs}
+        onConnect={connect}
+        onDisconnect={disconnect}
+        onSendMessage={sendMessage}
+      />
     </div>
   );
 };

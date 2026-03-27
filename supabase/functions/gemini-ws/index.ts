@@ -7,9 +7,31 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const decoder = new TextDecoder();
+
+async function normalizeToText(data: unknown): Promise<string | null> {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data instanceof Blob) {
+    return await data.text();
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return decoder.decode(new Uint8Array(data));
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return decoder.decode(data);
+  }
+
+  return null;
+}
+
 Deno.serve((req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   if (!GEMINI_API_KEY) {
@@ -48,10 +70,15 @@ Deno.serve((req) => {
       clientSocket.send(JSON.stringify({ type: "proxy_ready" }));
     };
 
-    geminiSocket.onmessage = (event) => {
-      // Forward Gemini responses to the client
+    geminiSocket.onmessage = async (event) => {
+      const upstreamMessage = await normalizeToText(event.data);
+      if (upstreamMessage === null) {
+        console.warn("[proxy] Dropped non-text upstream frame");
+        return;
+      }
+
       if (clientSocket.readyState === WebSocket.OPEN) {
-        clientSocket.send(typeof event.data === "string" ? event.data : event.data);
+        clientSocket.send(upstreamMessage);
       }
     };
 
@@ -72,10 +99,15 @@ Deno.serve((req) => {
     };
   };
 
-  clientSocket.onmessage = (event) => {
-    // Forward client messages to Gemini
+  clientSocket.onmessage = async (event) => {
+    const clientMessage = await normalizeToText(event.data);
+    if (clientMessage === null) {
+      console.warn("[proxy] Dropped non-text client frame");
+      return;
+    }
+
     if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) {
-      geminiSocket.send(typeof event.data === "string" ? event.data : event.data);
+      geminiSocket.send(clientMessage);
     } else {
       console.warn("[proxy] Gemini socket not ready, buffering message skipped");
     }
