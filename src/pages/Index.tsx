@@ -6,7 +6,6 @@ type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
 const Index = () => {
   const [config, setConfig] = useState({
-    apiKey: "",
     model: "gemini-3.1-flash-live-preview",
     systemInstructions: "",
   });
@@ -15,7 +14,7 @@ const Index = () => {
   return (
     <div className="flex min-h-screen">
       <ConfigPanel onApply={setConfig} />
-      <TestingArea apiKey={config.apiKey} status={status} />
+      <TestingArea status={status} />
     </div>
   );
 };

@@ -1,11 +1,9 @@
 import { Mic, Radio } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
 interface TestingAreaProps {
-  apiKey: string;
   status: ConnectionStatus;
 }
 
@@ -15,22 +13,14 @@ const statusConfig: Record<ConnectionStatus, { label: string; color: string; dot
   listening: { label: "Listening / Speaking", color: "text-primary", dotClass: "bg-primary animate-pulse" },
 };
 
-const TestingArea = ({ apiKey, status }: TestingAreaProps) => {
+const TestingArea = ({ status }: TestingAreaProps) => {
   const { toast } = useToast();
   const { label, color, dotClass } = statusConfig[status];
 
   const handleStart = () => {
-    if (!apiKey.trim()) {
-      toast({
-        title: "Missing API Key",
-        description: "Please provide an API key first.",
-        variant: "destructive",
-      });
-      return;
-    }
     toast({
       title: "Ready to connect",
-      description: "Ready to connect to API.",
+      description: "Backend API key configured. Ready to connect to Gemini.",
     });
   };
 

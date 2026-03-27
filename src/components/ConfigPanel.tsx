@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings, Eye, EyeOff, Save } from "lucide-react";
+import { Settings, Save, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -7,18 +7,16 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 interface ConfigPanelProps {
-  onApply: (config: { apiKey: string; model: string; systemInstructions: string }) => void;
+  onApply: (config: { model: string; systemInstructions: string }) => void;
 }
 
 const ConfigPanel = ({ onApply }: ConfigPanelProps) => {
-  const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("gemini-3.1-flash-live-preview");
   const [systemInstructions, setSystemInstructions] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const { toast } = useToast();
 
   const handleApply = () => {
-    onApply({ apiKey, model, systemInstructions });
+    onApply({ model, systemInstructions });
     toast({
       title: "Settings Saved",
       description: "Your configuration has been applied.",
@@ -32,25 +30,11 @@ const ConfigPanel = ({ onApply }: ConfigPanelProps) => {
         <h2 className="text-lg font-semibold">Configuration</h2>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="api-key" className="text-sm text-muted-foreground">Gemini API Key</Label>
-        <div className="relative">
-          <Input
-            id="api-key"
-            type={showKey ? "text" : "password"}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Enter your API key…"
-            className="pr-10 bg-muted border-border font-mono text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
+      <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
+        <ShieldCheck className="h-4 w-4 text-accent-foreground shrink-0" />
+        <span className="text-xs text-accent-foreground">
+          Gemini API Key is securely stored on the backend.
+        </span>
       </div>
 
       <div className="space-y-2">
