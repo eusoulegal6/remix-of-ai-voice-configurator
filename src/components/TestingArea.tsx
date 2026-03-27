@@ -1,4 +1,4 @@
-import { Mic, MicOff, Radio } from "lucide-react";
+import { Mic, MicOff } from "lucide-react";
 import type { ConnectionStatus } from "@/hooks/useGeminiAudio";
 
 interface LogEntry {

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import ConfigPanel from "@/components/ConfigPanel";
-import TestingArea from "@/components/TestingArea";
 import { useGeminiAudio } from "@/hooks/useGeminiAudio";
+import TestingArea from "@/components/TestingArea";
+import ConfigSection from "@/components/ConfigSection";
 
 const Index = () => {
   const [config, setConfig] = useState({
@@ -15,9 +15,9 @@ const Index = () => {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <ConfigPanel onApply={setConfig} />
+    <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
       <TestingArea status={status} logs={logs} onStart={start} onStop={stop} />
+      <ConfigSection onApply={setConfig} />
     </div>
   );
 };
