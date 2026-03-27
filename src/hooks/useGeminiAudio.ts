@@ -46,6 +46,8 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
   const playbackCtxRef = useRef<AudioContext | null>(null);
   const nextPlayTimeRef = useRef<number>(0);
   const connectTimeoutRef = useRef<number | null>(null);
+  const streamReadyTimeoutRef = useRef<number | null>(null);
+  const isReadyToStreamRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -55,6 +57,13 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     if (connectTimeoutRef.current !== null) {
       window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearStreamReadyTimeout = useCallback(() => {
+    if (streamReadyTimeoutRef.current !== null) {
+      window.clearTimeout(streamReadyTimeoutRef.current);
+      streamReadyTimeoutRef.current = null;
     }
   }, []);
 
@@ -206,9 +215,16 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
           // Setup complete from Gemini
           if (data.setupComplete) {
-            addLog("[Gemini] Setup Complete received — start speaking!", "info");
+            addLog("[Gemini] Setup Complete received", "info");
             setStatus("listening");
             startAudioCapture(audioCtx, stream, ws);
+            clearStreamReadyTimeout();
+            isReadyToStreamRef.current = false;
+            addLog("[Mic] Stabilizing hardware for 500ms before streaming", "info");
+            streamReadyTimeoutRef.current = window.setTimeout(() => {
+              isReadyToStreamRef.current = true;
+              addLog("[Mic] Ready to stream audio", "info");
+            }, 500);
             return;
           }
 
@@ -251,7 +267,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       addLog(`Error: ${err.message}`, "error");
       setStatus("disconnected");
     }
-  }, [status, model, systemInstructions, addLog, playAudioChunk, clearConnectTimeout, describeCloseEvent, describeErrorEvent]);
+  }, [status, model, systemInstructions, addLog, playAudioChunk, clearConnectTimeout, clearStreamReadyTimeout, describeCloseEvent, describeErrorEvent]);
 
   const startAudioCapture = (
     audioCtx: AudioContext,
@@ -267,8 +283,18 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
     processor.onaudioprocess = (e) => {
       if (ws.readyState !== WebSocket.OPEN) return;
+      if (!isReadyToStreamRef.current) return;
 
       const float32 = e.inputBuffer.getChannelData(0);
+      let isSilent = true;
+      for (let i = 0; i < float32.length; i++) {
+        if (float32[i] !== 0) {
+          isSilent = false;
+          break;
+        }
+      }
+
+      if (isSilent) return;
 
       // Convert Float32 → 16-bit PCM via DataView for correct byte layout
       const pcmBuffer = floatTo16BitPCM(float32);
@@ -300,6 +326,8 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
   const stop = useCallback(() => {
     clearConnectTimeout();
+    clearStreamReadyTimeout();
+    isReadyToStreamRef.current = false;
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
@@ -318,7 +346,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
     setStatus("disconnected");
     addLog("Conversation ended");
-  }, [addLog, clearConnectTimeout]);
+  }, [addLog, clearConnectTimeout, clearStreamReadyTimeout]);
 
   return { status, logs, start, stop };
 }
