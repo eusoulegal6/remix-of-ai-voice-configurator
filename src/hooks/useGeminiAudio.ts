@@ -380,7 +380,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
         turns: [
           {
             role: "user",
-            parts: [{ text: "Hello, can you hear me? Please say yes." }],
+            parts: [{ text: "Hello, this is a text isolation test. If you hear this, please say 'Test successful'." }],
           },
         ],
         turnComplete: true,
