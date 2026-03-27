@@ -124,9 +124,19 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
         addLog("WebSocket connected, waiting for proxy…");
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
+        let textData: string;
+        if (event.data instanceof Blob) {
+          textData = await event.data.text();
+        } else if (typeof event.data === "string") {
+          textData = event.data;
+        } else {
+          addLog(`[WS ←] Unknown data type: ${typeof event.data}`, "error");
+          return;
+        }
+
         try {
-          const data = JSON.parse(event.data);
+          const data = JSON.parse(textData);
 
           // Log a summary of every incoming message for debugging
           const msgKeys = Object.keys(data).join(", ");
@@ -205,7 +215,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
             addLog("Agent turn complete");
           }
         } catch (parseErr) {
-          addLog(`[WS ←] Non-JSON message (${typeof event.data}, len=${String(event.data).length})`, "info");
+          addLog(`[WS ←] JSON parse error (len=${textData.length}): ${textData.slice(0, 120)}`, "error");
         }
       };
 
