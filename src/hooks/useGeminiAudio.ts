@@ -205,14 +205,8 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     }
 
     const payload = {
-      clientContent: {
-        turns: [
-          {
-            role: "user",
-            parts: [{ text: messageText }],
-          },
-        ],
-        turnComplete: true,
+      realtimeInput: {
+        text: messageText,
       },
     };
 

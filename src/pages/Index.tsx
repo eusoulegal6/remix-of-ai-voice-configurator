@@ -5,7 +5,7 @@ import { useGeminiAudio } from "@/hooks/useGeminiAudio";
 
 const Index = () => {
   const [config, setConfig] = useState({
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-3.1-flash-live-preview",
     systemInstructions: "",
   });
 
