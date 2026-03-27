@@ -11,11 +11,12 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
+function base64EncodeAudio(buffer: ArrayBuffer): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
   }
   return window.btoa(binary);
 }
@@ -276,19 +277,26 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
       // Convert Float32 → 16-bit PCM via DataView for correct byte layout
       const pcmBuffer = floatTo16BitPCM(float32);
-      const base64 = arrayBufferToBase64(pcmBuffer);
+      const base64Data = base64EncodeAudio(pcmBuffer);
 
-      const msg = {
+      if (!base64Data || /^=+$/.test(base64Data)) {
+        return;
+      }
+
+      const payload = {
         realtimeInput: {
           mediaChunks: [
             {
               mimeType: "audio/pcm;rate=16000",
-              data: base64,
+              data: base64Data,
             },
           ],
         },
       };
-      ws.send(JSON.stringify(msg));
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+      }
     };
 
     source.connect(processor);
