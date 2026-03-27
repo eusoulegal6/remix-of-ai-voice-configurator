@@ -115,8 +115,34 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     processorRef.current = processor;
 
-    // DISABLED: Real mic capture bypassed for silent chunk isolation test
-    processor.onaudioprocess = () => {};
+    processor.onaudioprocess = (e) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      if (!isReadyToStreamRef.current) return;
+
+      const float32 = e.inputBuffer.getChannelData(0);
+      let isSilent = true;
+      for (let i = 0; i < float32.length; i++) {
+        if (float32[i] !== 0) { isSilent = false; break; }
+      }
+      if (isSilent) return;
+
+      const pcmBuffer = floatTo16BitPCM(float32);
+      const base64Data = arrayBufferToBase64(pcmBuffer);
+
+      if (base64Data) {
+        const payload = {
+          realtimeInput: {
+            audio: {
+              mimeType: "audio/pcm;rate=16000",
+              data: base64Data,
+            },
+          },
+        };
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        }
+      }
+    };
 
     source.connect(processor);
     processor.connect(audioCtx.destination);
