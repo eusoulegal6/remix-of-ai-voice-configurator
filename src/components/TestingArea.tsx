@@ -1,46 +1,41 @@
-import { useState } from "react";
-import { Radio } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Mic, MicOff, Radio } from "lucide-react";
 import type { ConnectionStatus } from "@/hooks/useGeminiAudio";
 
 interface LogEntry {
   timestamp: Date;
   message: string;
-  type: "info" | "error";
+  type: "info" | "error" | "audio";
 }
 
 interface TestingAreaProps {
   status: ConnectionStatus;
   logs: LogEntry[];
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onSendMessage: (message: string) => void;
+  onStart: () => void;
+  onStop: () => void;
 }
 
 const statusConfig: Record<ConnectionStatus, { label: string; color: string; dotClass: string }> = {
   disconnected: { label: "Disconnected", color: "text-muted-foreground", dotClass: "bg-muted-foreground" },
   connecting: { label: "Connecting…", color: "text-foreground", dotClass: "bg-accent animate-pulse" },
-  listening: { label: "Connected", color: "text-primary", dotClass: "bg-primary animate-pulse" },
+  listening: { label: "Listening / Speaking", color: "text-primary", dotClass: "bg-primary animate-pulse" },
 };
 
-const logTypeColors: Record<LogEntry["type"], string> = {
+const logTypeColors: Record<string, string> = {
   info: "text-muted-foreground",
   error: "text-destructive",
+  audio: "text-primary",
 };
 
-const TestingArea = ({ status, logs, onConnect, onDisconnect, onSendMessage }: TestingAreaProps) => {
-  const [message, setMessage] = useState("");
+const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
   const { label, color, dotClass } = statusConfig[status];
-  const isConnected = status !== "disconnected";
-  const canSendMessage = status === "listening" && message.trim().length > 0;
+  const isActive = status !== "disconnected";
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextMessage = message.trim();
-    if (!nextMessage) return;
-    onSendMessage(nextMessage);
-    setMessage("");
+  const handleClick = () => {
+    if (isActive) {
+      onStop();
+    } else {
+      onStart();
+    }
   };
 
   return (
@@ -50,49 +45,42 @@ const TestingArea = ({ status, logs, onConnect, onDisconnect, onSendMessage }: T
         <span className={`text-sm font-medium ${color}`}>{label}</span>
       </div>
 
-      <div className="w-full max-w-2xl space-y-6">
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <Button
-            type="button"
-            size="lg"
-            variant={isConnected ? "destructive" : "default"}
-            onClick={isConnected ? onDisconnect : onConnect}
-            className="min-w-56"
-          >
-            {isConnected ? "Disconnect" : "Connect to Gemini"}
-          </Button>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleClick}
+          className={`group relative h-36 w-36 rounded-full border-2 flex items-center justify-center transition-all active:scale-95 ${
+            isActive
+              ? "bg-destructive/20 border-destructive"
+              : "bg-secondary border-border hover:border-primary"
+          }`}
+        >
+          {isActive ? (
+            <MicOff className="h-12 w-12 text-destructive" />
+          ) : (
+            <Mic className="h-12 w-12 text-muted-foreground group-hover:text-primary transition-colors" />
+          )}
+          <span className="absolute -bottom-8 text-xs text-muted-foreground font-medium">
+            {isActive ? "Stop Conversation" : "Start Conversation"}
+          </span>
+        </button>
+      </div>
 
-          <form onSubmit={handleSubmit} className="flex w-full gap-3">
-            <Input
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Type a message to Gemini…"
-              disabled={status !== "listening"}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={!canSendMessage}>
-              Send Message
-            </Button>
-          </form>
+      <div className="w-full max-w-2xl mt-8">
+        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
+          <Radio className="h-4 w-4" />
+          <span className="text-xs font-semibold uppercase tracking-wider">Activity Log</span>
         </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-            <Radio className="h-4 w-4" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Activity Log</span>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/50 p-4 h-64 overflow-y-auto font-mono text-xs space-y-1">
-            {logs.length === 0 ? (
-              <p className="text-muted-foreground opacity-50">Waiting for connection…</p>
-            ) : (
-              logs.map((entry, i) => (
-                <p key={i} className={logTypeColors[entry.type]}>
-                  <span className="opacity-50">[{entry.timestamp.toLocaleTimeString()}]</span>{" "}
-                  {entry.message}
-                </p>
-              ))
-            )}
-          </div>
+        <div className="rounded-lg bg-muted/50 border border-border p-4 h-64 overflow-y-auto font-mono text-xs space-y-1">
+          {logs.length === 0 ? (
+            <p className="text-muted-foreground opacity-50">Waiting for connection…</p>
+          ) : (
+            logs.map((entry, i) => (
+              <p key={i} className={logTypeColors[entry.type] || "text-muted-foreground"}>
+                <span className="opacity-50">[{entry.timestamp.toLocaleTimeString()}]</span>{" "}
+                {entry.message}
+              </p>
+            ))
+          )}
         </div>
       </div>
     </main>

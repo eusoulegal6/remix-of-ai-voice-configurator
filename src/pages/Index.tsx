@@ -9,7 +9,7 @@ const Index = () => {
     systemInstructions: "",
   });
 
-  const { status, logs, connect, disconnect, sendMessage } = useGeminiAudio({
+  const { status, logs, start, stop } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
   });
@@ -17,13 +17,7 @@ const Index = () => {
   return (
     <div className="flex min-h-screen">
       <ConfigPanel onApply={setConfig} />
-      <TestingArea
-        status={status}
-        logs={logs}
-        onConnect={connect}
-        onDisconnect={disconnect}
-        onSendMessage={sendMessage}
-      />
+      <TestingArea status={status} logs={logs} onStart={start} onStop={stop} />
     </div>
   );
 };
