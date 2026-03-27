@@ -113,7 +113,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
               setup: {
                 model: `models/${model}`,
                 generationConfig: {
-                  responseModalities: ["TEXT"],
+                  responseModalities: ["AUDIO"],
                 },
                 ...(systemInstructions.trim()
                   ? {
