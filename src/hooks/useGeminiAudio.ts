@@ -11,22 +11,6 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-function base64EncodeAudio(buffer: ArrayBuffer): Promise<string | null> {
-  return new Promise((resolve) => {
-    const blob = new Blob([buffer], { type: "audio/pcm;rate=16000" });
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== "string") {
-        resolve(null);
-        return;
-      }
-      const base64Data = reader.result.split(",")[1] ?? null;
-      resolve(base64Data);
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
-}
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
@@ -55,7 +39,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
   const connectTimeoutRef = useRef<number | null>(null);
   const streamReadyTimeoutRef = useRef<number | null>(null);
   const isReadyToStreamRef = useRef(false);
-  const isEncodingAudioRef = useRef(false);
+  
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -117,10 +101,9 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     processorRef.current = processor;
 
-    processor.onaudioprocess = async (e) => {
+    processor.onaudioprocess = (e) => {
       if (ws.readyState !== WebSocket.OPEN) return;
       if (!isReadyToStreamRef.current) return;
-      if (isEncodingAudioRef.current) return;
 
       const float32 = e.inputBuffer.getChannelData(0);
       let isSilent = true;
@@ -132,30 +115,30 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       }
       if (isSilent) return;
 
-      isEncodingAudioRef.current = true;
-      try {
-        const pcmBuffer = floatTo16BitPCM(float32);
-        const base64Data = await base64EncodeAudio(pcmBuffer);
-
-        if (!base64Data || /^=+$/.test(base64Data)) return;
-
-        const payload = {
-          realtimeInput: {
-            mediaChunks: [
-              {
-                mimeType: "audio/pcm;rate=16000",
-                data: base64Data,
+      const pcmBuffer = floatTo16BitPCM(float32);
+      const blob = new Blob([pcmBuffer], { type: "audio/pcm;rate=16000" });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          const base64data = reader.result.split(",")[1];
+          if (base64data && base64data.length > 10) {
+            const payload = {
+              realtimeInput: {
+                mediaChunks: [
+                  {
+                    mimeType: "audio/pcm;rate=16000",
+                    data: base64data,
+                  },
+                ],
               },
-            ],
-          },
-        };
-
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(payload));
+            };
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(payload));
+            }
+          }
         }
-      } finally {
-        isEncodingAudioRef.current = false;
-      }
+      };
+      reader.readAsDataURL(blob);
     };
 
     source.connect(processor);
@@ -312,7 +295,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     clearConnectTimeout();
     clearStreamReadyTimeout();
     isReadyToStreamRef.current = false;
-    isEncodingAudioRef.current = false;
+    
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
