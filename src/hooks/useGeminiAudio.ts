@@ -11,22 +11,6 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-function base64EncodeAudio(buffer: ArrayBuffer): Promise<string | null> {
-  return new Promise((resolve) => {
-    const blob = new Blob([buffer], { type: "audio/pcm;rate=16000" });
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== "string") {
-        resolve(null);
-        return;
-      }
-      const base64Data = reader.result.split(",")[1] ?? null;
-      resolve(base64Data);
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
-}
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
