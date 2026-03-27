@@ -1,4 +1,5 @@
 import { Mic, MicOff, Radio } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ConnectionStatus } from "@/hooks/useGeminiAudio";
 
 interface LogEntry {
@@ -12,6 +13,7 @@ interface TestingAreaProps {
   logs: LogEntry[];
   onStart: () => void;
   onStop: () => void;
+  onSendTextTest: () => void;
 }
 
 const statusConfig: Record<ConnectionStatus, { label: string; color: string; dotClass: string }> = {
@@ -26,9 +28,10 @@ const logTypeColors: Record<string, string> = {
   audio: "text-primary",
 };
 
-const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
+const TestingArea = ({ status, logs, onStart, onStop, onSendTextTest }: TestingAreaProps) => {
   const { label, color, dotClass } = statusConfig[status];
   const isActive = status !== "disconnected";
+  const canSendTextTest = status === "listening";
 
   const handleClick = () => {
     if (isActive) {
@@ -47,23 +50,36 @@ const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
       </div>
 
       {/* Push to Talk */}
-      <button
-        onClick={handleClick}
-        className={`group relative h-36 w-36 rounded-full border-2 flex items-center justify-center transition-all active:scale-95 ${
-          isActive
-            ? "bg-destructive/20 border-destructive glow-primary-strong"
-            : "bg-secondary border-border hover:border-primary hover:glow-primary"
-        }`}
-      >
-        {isActive ? (
-          <MicOff className="h-12 w-12 text-destructive" />
-        ) : (
-          <Mic className="h-12 w-12 text-muted-foreground group-hover:text-primary transition-colors" />
-        )}
-        <span className="absolute -bottom-8 text-xs text-muted-foreground font-medium">
-          {isActive ? "Stop Conversation" : "Start Conversation"}
-        </span>
-      </button>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleClick}
+          className={`group relative h-36 w-36 rounded-full border-2 flex items-center justify-center transition-all active:scale-95 ${
+            isActive
+              ? "bg-destructive/20 border-destructive glow-primary-strong"
+              : "bg-secondary border-border hover:border-primary hover:glow-primary"
+          }`}
+        >
+          {isActive ? (
+            <MicOff className="h-12 w-12 text-destructive" />
+          ) : (
+            <Mic className="h-12 w-12 text-muted-foreground group-hover:text-primary transition-colors" />
+          )}
+          <span className="absolute -bottom-8 text-xs text-muted-foreground font-medium">
+            {isActive ? "Stop Conversation" : "Start Conversation"}
+          </span>
+        </button>
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          onClick={onSendTextTest}
+          disabled={!canSendTextTest}
+          className="min-w-40"
+        >
+          Send Text Test
+        </Button>
+      </div>
 
       {/* Log area */}
       <div className="w-full max-w-2xl mt-8">

@@ -11,14 +11,24 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   return buffer;
 }
 
-function base64EncodeAudio(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
-  }
-  return window.btoa(binary);
+function base64EncodeAudio(buffer: ArrayBuffer): Promise<string | null> {
+  return new Promise((resolve) => {
+    const blob = new Blob([buffer], { type: "audio/pcm;rate=16000" });
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") {
+        resolve(null);
+        return;
+      }
+
+      const base64Data = reader.result.split(",")[1] ?? null;
+      resolve(base64Data);
+    };
+
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
@@ -48,6 +58,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
   const connectTimeoutRef = useRef<number | null>(null);
   const streamReadyTimeoutRef = useRef<number | null>(null);
   const isReadyToStreamRef = useRef(false);
+  const isEncodingAudioRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -281,9 +292,10 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     processorRef.current = processor;
 
-    processor.onaudioprocess = (e) => {
+    processor.onaudioprocess = async (e) => {
       if (ws.readyState !== WebSocket.OPEN) return;
       if (!isReadyToStreamRef.current) return;
+      if (isEncodingAudioRef.current) return;
 
       const float32 = e.inputBuffer.getChannelData(0);
       let isSilent = true;
@@ -296,27 +308,32 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
       if (isSilent) return;
 
-      // Convert Float32 → 16-bit PCM via DataView for correct byte layout
-      const pcmBuffer = floatTo16BitPCM(float32);
-      const base64Data = base64EncodeAudio(pcmBuffer);
+      isEncodingAudioRef.current = true;
 
-      if (!base64Data || /^=+$/.test(base64Data)) {
-        return;
-      }
+      try {
+        const pcmBuffer = floatTo16BitPCM(float32);
+        const base64Data = await base64EncodeAudio(pcmBuffer);
 
-      const payload = {
-        realtimeInput: {
-          mediaChunks: [
-            {
-              mimeType: "audio/pcm;rate=16000",
-              data: base64Data,
-            },
-          ],
-        },
-      };
+        if (!base64Data || /^=+$/.test(base64Data)) {
+          return;
+        }
 
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(payload));
+        const payload = {
+          realtimeInput: {
+            mediaChunks: [
+              {
+                mimeType: "audio/pcm;rate=16000",
+                data: base64Data,
+              },
+            ],
+          },
+        };
+
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        }
+      } finally {
+        isEncodingAudioRef.current = false;
       }
     };
 
@@ -328,6 +345,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     clearConnectTimeout();
     clearStreamReadyTimeout();
     isReadyToStreamRef.current = false;
+    isEncodingAudioRef.current = false;
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
@@ -348,5 +366,29 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     addLog("Conversation ended");
   }, [addLog, clearConnectTimeout, clearStreamReadyTimeout]);
 
-  return { status, logs, start, stop };
+  const sendTextTest = useCallback(() => {
+    const ws = wsRef.current;
+
+    if (!ws || ws.readyState !== WebSocket.OPEN || status !== "listening") {
+      addLog("Text test unavailable until the conversation is active", "error");
+      return;
+    }
+
+    const payload = {
+      clientContent: {
+        turns: [
+          {
+            role: "user",
+            parts: [{ text: "Hello, can you hear me? Please say yes." }],
+          },
+        ],
+        turnComplete: true,
+      },
+    };
+
+    ws.send(JSON.stringify(payload));
+    addLog("Sent text isolation test", "info");
+  }, [addLog, status]);
+
+  return { status, logs, start, stop, sendTextTest };
 }
