@@ -1,5 +1,7 @@
 import { Mic, MicOff, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import type { ConnectionStatus } from "@/hooks/useGeminiAudio";
 
 interface LogEntry {
