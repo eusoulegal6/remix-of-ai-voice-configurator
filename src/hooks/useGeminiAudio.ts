@@ -4,13 +4,26 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(float32Array.length * 2);
   const view = new DataView(buffer);
   let offset = 0;
+
   for (let i = 0; i < float32Array.length; i++, offset += 2) {
-    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    let s = Math.max(-1, Math.min(1, float32Array[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
+
   return buffer;
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  return window.btoa(binary);
+}
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
@@ -39,7 +52,6 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
   const connectTimeoutRef = useRef<number | null>(null);
   const streamReadyTimeoutRef = useRef<number | null>(null);
   const isReadyToStreamRef = useRef(false);
-  
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -64,16 +76,18 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       if (!playbackCtxRef.current) {
         playbackCtxRef.current = new AudioContext({ sampleRate: 24000 });
       }
-      const ctx = playbackCtxRef.current;
 
+      const ctx = playbackCtxRef.current;
       const binaryStr = atob(base64Data);
       const bytes = new Uint8Array(binaryStr.length);
+
       for (let i = 0; i < binaryStr.length; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
       }
 
       const pcm16 = new Int16Array(bytes.buffer);
       const float32 = new Float32Array(pcm16.length);
+
       for (let i = 0; i < pcm16.length; i++) {
         float32[i] = pcm16[i] / 32768;
       }
@@ -107,38 +121,35 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
       const float32 = e.inputBuffer.getChannelData(0);
       let isSilent = true;
+
       for (let i = 0; i < float32.length; i++) {
         if (float32[i] !== 0) {
           isSilent = false;
           break;
         }
       }
+
       if (isSilent) return;
 
-      const pcmBuffer = floatTo16BitPCM(float32);
-      const blob = new Blob([pcmBuffer], { type: "audio/pcm;rate=16000" });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === "string") {
-          const base64data = reader.result.split(",")[1];
-          if (base64data && base64data.length > 10) {
-            const payload = {
-              realtimeInput: {
-                mediaChunks: [
-                  {
-                    mimeType: "audio/pcm;rate=16000",
-                    data: base64data,
-                  },
-                ],
+      const pcmBuffer = floatTo16BitPCM(e.inputBuffer.getChannelData(0));
+      const base64Data = arrayBufferToBase64(pcmBuffer);
+
+      if (base64Data) {
+        const payload = {
+          realtimeInput: {
+            mediaChunks: [
+              {
+                mimeType: "audio/pcm;rate=16000",
+                data: base64Data,
               },
-            };
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify(payload));
-            }
-          }
+            ],
+          },
+        };
+
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
         }
-      };
-      reader.readAsDataURL(blob);
+      }
     };
 
     source.connect(processor);
@@ -186,6 +197,7 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
 
       ws.onmessage = async (event) => {
         let textData: string;
+
         if (event.data instanceof Blob) {
           textData = await event.data.text();
         } else if (typeof event.data === "string") {
@@ -281,7 +293,10 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       ws.onclose = (event) => {
         clearConnectTimeout();
         wsRef.current = null;
-        addLog(`WebSocket closed (code: ${event.code}, reason: ${event.reason || "none"}, clean: ${event.wasClean})`, event.code === 1000 ? "info" : "error");
+        addLog(
+          `WebSocket closed (code: ${event.code}, reason: ${event.reason || "none"}, clean: ${event.wasClean})`,
+          event.code === 1000 ? "info" : "error",
+        );
         setStatus("disconnected");
       };
     } catch (err: any) {
@@ -289,13 +304,21 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       addLog(`Error: ${err.message}`, "error");
       setStatus("disconnected");
     }
-  }, [status, model, systemInstructions, addLog, playAudioChunk, clearConnectTimeout, clearStreamReadyTimeout, startAudioCapture]);
+  }, [
+    status,
+    model,
+    systemInstructions,
+    addLog,
+    playAudioChunk,
+    clearConnectTimeout,
+    clearStreamReadyTimeout,
+    startAudioCapture,
+  ]);
 
   const stop = useCallback(() => {
     clearConnectTimeout();
     clearStreamReadyTimeout();
     isReadyToStreamRef.current = false;
-    
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioContextRef.current?.close();
