@@ -115,8 +115,34 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     const processor = audioCtx.createScriptProcessor(4096, 1, 1);
     processorRef.current = processor;
 
-    // DISABLED: Real mic capture bypassed for silent chunk isolation test
-    processor.onaudioprocess = () => {};
+    processor.onaudioprocess = (e) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      if (!isReadyToStreamRef.current) return;
+
+      const float32 = e.inputBuffer.getChannelData(0);
+      let isSilent = true;
+      for (let i = 0; i < float32.length; i++) {
+        if (float32[i] !== 0) { isSilent = false; break; }
+      }
+      if (isSilent) return;
+
+      const pcmBuffer = floatTo16BitPCM(float32);
+      const base64Data = arrayBufferToBase64(pcmBuffer);
+
+      if (base64Data) {
+        const payload = {
+          realtimeInput: {
+            audio: {
+              mimeType: "audio/pcm;rate=16000",
+              data: base64Data,
+            },
+          },
+        };
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        }
+      }
+    };
 
     source.connect(processor);
     processor.connect(audioCtx.destination);
@@ -220,35 +246,12 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
             addLog("[Gemini] Setup Complete received");
             setStatus("listening");
             startAudioCapture(audioCtx, stream, ws);
-
-            // Send hardcoded 1-second silent PCM chunk after 500ms
-            addLog("[Test] Scheduling hardcoded silent chunk in 500ms…");
+            isReadyToStreamRef.current = false;
+            addLog("[Mic] Stabilizing hardware for 500ms…");
             clearStreamReadyTimeout();
             streamReadyTimeoutRef.current = window.setTimeout(() => {
-              const silentPCM = new Int16Array(16000);
-              let binary = "";
-              const bytes = new Uint8Array(silentPCM.buffer);
-              for (let i = 0; i < bytes.length; i++) {
-                binary += String.fromCharCode(bytes[i]);
-              }
-              const silentBase64 = window.btoa(binary);
-
-              const payload = {
-                realtimeInput: {
-                  mediaChunks: [
-                    {
-                      mimeType: "audio/pcm;rate=16000",
-                      data: silentBase64,
-                    },
-                  ],
-                },
-              };
-
-              const stringified = JSON.stringify(payload);
-              addLog(`[WS →] Sending Silent Chunk: ${stringified.substring(0, 80)}…`);
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(stringified);
-              }
+              isReadyToStreamRef.current = true;
+              addLog("[Mic] Ready to stream audio");
             }, 500);
             return;
           }
