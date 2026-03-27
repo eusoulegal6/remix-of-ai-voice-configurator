@@ -177,11 +177,6 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
                 model: `models/${model}`,
                 generationConfig: {
                   responseModalities: ["AUDIO"],
-                  speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: { voiceName: "Aoede" },
-                    },
-                  },
                 },
                 ...(systemInstructions.trim()
                   ? {
