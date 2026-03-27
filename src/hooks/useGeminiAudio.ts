@@ -391,5 +391,5 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     addLog("Sent text isolation test", "info");
   }, [addLog, status]);
 
-  return { status, logs, start, stop, sendTextTest };
+  return { status, logs, start, stop, sendTextTest, isMicMuted, setIsMicMuted };
 }

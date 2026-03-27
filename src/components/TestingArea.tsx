@@ -73,16 +73,24 @@ const TestingArea = ({ status, logs, onStart, onStop, onSendTextTest, isMicMuted
           </span>
         </button>
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          onClick={onSendTextTest}
-          disabled={!canSendTextTest}
-          className="min-w-40"
-        >
-          Send Text Test
-        </Button>
+        <div className="flex flex-col gap-3 items-center">
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={onSendTextTest}
+            disabled={!canSendTextTest}
+            className="min-w-40"
+          >
+            Send Text Test
+          </Button>
+          <div className="flex items-center gap-2">
+            <Switch id="mic-mute" checked={!isMicMuted} onCheckedChange={onToggleMic} />
+            <Label htmlFor="mic-mute" className="text-xs text-muted-foreground">
+              {isMicMuted ? "Mic Muted (no audio sent)" : "Mic Live"}
+            </Label>
+          </div>
+        </div>
       </div>
 
       {/* Log area */}
