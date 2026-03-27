@@ -65,24 +65,6 @@ const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
         </button>
       </div>
 
-      <div className="w-full max-w-2xl mt-8">
-        <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-          <Radio className="h-4 w-4" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Activity Log</span>
-        </div>
-        <div className="rounded-lg bg-muted/50 border border-border p-4 h-64 overflow-y-auto font-mono text-xs space-y-1">
-          {logs.length === 0 ? (
-            <p className="text-muted-foreground opacity-50">Waiting for connection…</p>
-          ) : (
-            logs.map((entry, i) => (
-              <p key={i} className={logTypeColors[entry.type] || "text-muted-foreground"}>
-                <span className="opacity-50">[{entry.timestamp.toLocaleTimeString()}]</span>{" "}
-                {entry.message}
-              </p>
-            ))
-          )}
-        </div>
-      </div>
     </main>
   );
 };
