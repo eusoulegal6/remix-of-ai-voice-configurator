@@ -246,35 +246,12 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
             addLog("[Gemini] Setup Complete received");
             setStatus("listening");
             startAudioCapture(audioCtx, stream, ws);
-
-            // Send hardcoded 1-second silent PCM chunk after 500ms
-            addLog("[Test] Scheduling hardcoded silent chunk in 500ms…");
+            isReadyToStreamRef.current = false;
+            addLog("[Mic] Stabilizing hardware for 500ms…");
             clearStreamReadyTimeout();
             streamReadyTimeoutRef.current = window.setTimeout(() => {
-              const silentPCM = new Int16Array(16000);
-              let binary = "";
-              const bytes = new Uint8Array(silentPCM.buffer);
-              for (let i = 0; i < bytes.length; i++) {
-                binary += String.fromCharCode(bytes[i]);
-              }
-              const silentBase64 = window.btoa(binary);
-
-              const payload = {
-                realtimeInput: {
-                  mediaChunks: [
-                    {
-                      mimeType: "audio/pcm;rate=16000",
-                      data: silentBase64,
-                    },
-                  ],
-                },
-              };
-
-              const stringified = JSON.stringify(payload);
-              addLog(`[WS →] Sending Silent Chunk: ${stringified.substring(0, 80)}…`);
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(stringified);
-              }
+              isReadyToStreamRef.current = true;
+              addLog("[Mic] Ready to stream audio");
             }, 500);
             return;
           }
