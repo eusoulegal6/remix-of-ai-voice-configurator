@@ -32,7 +32,7 @@ const logTypeColors: Record<string, string> = {
   audio: "text-primary",
 };
 
-const TestingArea = ({ status, logs, onStart, onStop, onSendTextTest }: TestingAreaProps) => {
+const TestingArea = ({ status, logs, onStart, onStop, onSendTextTest, isMicMuted, onToggleMic }: TestingAreaProps) => {
   const { label, color, dotClass } = statusConfig[status];
   const isActive = status !== "disconnected";
   const canSendTextTest = status === "listening";
