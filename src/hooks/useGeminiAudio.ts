@@ -1,5 +1,20 @@
 import { useState, useRef, useCallback } from "react";
 
+function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
+  if (inputSampleRate === 16000) return float32Array;
+  const ratio = inputSampleRate / 16000;
+  const newLength = Math.round(float32Array.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const srcIndex = i * ratio;
+    const low = Math.floor(srcIndex);
+    const high = Math.min(low + 1, float32Array.length - 1);
+    const frac = srcIndex - low;
+    result[i] = float32Array[low] * (1 - frac) + float32Array[high] * frac;
+  }
+  return result;
+}
+
 function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(float32Array.length * 2);
   const view = new DataView(buffer);
@@ -119,14 +134,15 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       if (ws.readyState !== WebSocket.OPEN) return;
       if (!isReadyToStreamRef.current) return;
 
-      const float32 = e.inputBuffer.getChannelData(0);
+      const rawFloat32 = e.inputBuffer.getChannelData(0);
       let isSilent = true;
-      for (let i = 0; i < float32.length; i++) {
-        if (float32[i] !== 0) { isSilent = false; break; }
+      for (let i = 0; i < rawFloat32.length; i++) {
+        if (rawFloat32[i] !== 0) { isSilent = false; break; }
       }
       if (isSilent) return;
 
-      const pcmBuffer = floatTo16BitPCM(float32);
+      const resampled = resampleTo16kHz(rawFloat32, audioCtx.sampleRate);
+      const pcmBuffer = floatTo16BitPCM(resampled);
       const base64Data = arrayBufferToBase64(pcmBuffer);
 
       if (base64Data) {
@@ -160,8 +176,10 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       streamRef.current = stream;
       addLog("Microphone access granted");
 
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      const audioCtx = new AudioContext();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
       audioContextRef.current = audioCtx;
+      addLog(`AudioContext running at ${audioCtx.sampleRate}Hz`);
 
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
       if (!baseUrl) throw new Error("Backend URL is missing");
