@@ -1,5 +1,20 @@
 import { useState, useRef, useCallback } from "react";
 
+function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
+  if (inputSampleRate === 16000) return float32Array;
+  const ratio = inputSampleRate / 16000;
+  const newLength = Math.round(float32Array.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const srcIndex = i * ratio;
+    const low = Math.floor(srcIndex);
+    const high = Math.min(low + 1, float32Array.length - 1);
+    const frac = srcIndex - low;
+    result[i] = float32Array[low] * (1 - frac) + float32Array[high] * frac;
+  }
+  return result;
+}
+
 function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   const buffer = new ArrayBuffer(float32Array.length * 2);
   const view = new DataView(buffer);
