@@ -177,7 +177,9 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       addLog("Microphone access granted");
 
       const audioCtx = new AudioContext();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
       audioContextRef.current = audioCtx;
+      addLog(`AudioContext running at ${audioCtx.sampleRate}Hz`);
 
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
       if (!baseUrl) throw new Error("Backend URL is missing");
