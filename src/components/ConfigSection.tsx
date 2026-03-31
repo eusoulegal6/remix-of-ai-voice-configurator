@@ -88,7 +88,9 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
   const [systemInstructions, setSystemInstructions] = useState("");
   const [voiceName, setVoiceName] = useState("Kore");
   const [persona, setPersona] = useState("professional");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  const [hasApplied, setHasApplied] = useState(false);
+  
   const { toast } = useToast();
 
   const handlePersonaChange = (value: string) => {
@@ -111,13 +113,14 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
       title: "Configuration Applied",
       description: "Your settings have been saved.",
     });
+    setHasApplied(true);
     setOpen(false);
   };
 
   const activePersona = PERSONA_OPTIONS.find((p) => p.value === persona)!;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => { if (hasApplied || val) setOpen(val); }}>
       <DialogTrigger asChild>
         <Button
           variant="outline"
