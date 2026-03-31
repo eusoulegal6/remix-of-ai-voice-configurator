@@ -66,6 +66,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const processorRef = useRef<AudioWorkletNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const playbackCtxRef = useRef<AudioContext | null>(null);
+  const activePlaybackSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlayTimeRef = useRef<number>(0);
   const connectTimeoutRef = useRef<number | null>(null);
   const streamReadyTimeoutRef = useRef<number | null>(null);
@@ -87,6 +88,19 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       window.clearTimeout(streamReadyTimeoutRef.current);
       streamReadyTimeoutRef.current = null;
     }
+  }, []);
+
+  const interruptPlayback = useCallback(() => {
+    for (const source of activePlaybackSourcesRef.current) {
+      try {
+        source.stop();
+      } catch {
+        // Ignore nodes that have already finished.
+      }
+    }
+
+    activePlaybackSourcesRef.current.clear();
+    nextPlayTimeRef.current = 0;
   }, []);
 
   const playAudioChunk = useCallback((base64Data: string) => {
@@ -116,6 +130,10 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
+      activePlaybackSourcesRef.current.add(source);
+      source.onended = () => {
+        activePlaybackSourcesRef.current.delete(source);
+      };
 
       const now = ctx.currentTime;
       const startTime = Math.max(now, nextPlayTimeRef.current);
@@ -206,7 +224,13 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
         throw new Error(message);
       }
 
-      const stream = await mediaDevices.getUserMedia({ audio: true });
+      const stream = await mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
       addLog("Microphone access granted");
 
@@ -278,6 +302,16 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
                     },
                   },
                 },
+                realtimeInputConfig: {
+                  activityHandling: "START_OF_ACTIVITY_INTERRUPTS",
+                  automaticActivityDetection: {
+                    disabled: false,
+                    startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+                    endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
+                    prefixPaddingMs: 20,
+                    silenceDurationMs: 100,
+                  },
+                },
                 ...(systemInstructions.trim()
                   ? {
                       systemInstruction: {
@@ -329,6 +363,12 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
             return;
           }
 
+          if (data?.serverContent?.interrupted) {
+            interruptPlayback();
+            addLog("Playback interrupted by user speech");
+            return;
+          }
+
           const inlineData = data?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
           if (inlineData?.data) {
             playAudioChunk(inlineData.data);
@@ -370,6 +410,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     systemInstructions,
     voiceName,
     addLog,
+    interruptPlayback,
     playAudioChunk,
     clearConnectTimeout,
     clearStreamReadyTimeout,
@@ -380,6 +421,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     clearConnectTimeout();
     clearStreamReadyTimeout();
     isReadyToStreamRef.current = false;
+    interruptPlayback();
     if (processorRef.current) {
       processorRef.current.port.onmessage = null;
       processorRef.current.disconnect();
@@ -396,11 +438,10 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     playbackCtxRef.current = null;
     streamRef.current = null;
     wsRef.current = null;
-    nextPlayTimeRef.current = 0;
 
     setStatus("disconnected");
     addLog("Conversation ended");
-  }, [addLog, clearConnectTimeout, clearStreamReadyTimeout]);
+  }, [addLog, clearConnectTimeout, clearStreamReadyTimeout, interruptPlayback]);
 
   return { status, logs, start, stop };
 }
