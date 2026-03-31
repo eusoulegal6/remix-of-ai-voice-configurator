@@ -218,6 +218,7 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
             Apply Configuration
           </Button>
         </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
