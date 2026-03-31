@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Settings, X, ShieldCheck, Save, MessageSquare, Globe, Sparkles, Users } from "lucide-react";
+import { Settings, ShieldCheck, Save, MessageSquare, Sparkles } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -18,44 +17,108 @@ interface ConfigSectionProps {
 }
 
 const PERSONA_OPTIONS = [
-  { value: "professional", label: "Professional", description: "Clear, concise, business-appropriate", icon: "💼" },
-  { value: "friendly", label: "Friendly", description: "Warm, casual, relationship-first approach", icon: "😊" },
-  { value: "technical", label: "Technical", description: "Detailed, precise, domain-expert style", icon: "🔧" },
-  { value: "concise", label: "Concise", description: "Short answers, straight to the point", icon: "⚡" },
-  { value: "custom", label: "Custom", description: "Write your own instructions below", icon: "✏️" },
-];
-
-const VOICE_OPTIONS = [
-  { value: "Kore", label: "Kore", tone: "Firm" },
-  { value: "Puck", label: "Puck", tone: "Upbeat" },
-  { value: "Charon", label: "Charon", tone: "Informative" },
-  { value: "Zephyr", label: "Zephyr", tone: "Bright" },
-  { value: "Fenrir", label: "Fenrir", tone: "Excitable" },
-  { value: "Leda", label: "Leda", tone: "Youthful" },
-  { value: "Orus", label: "Orus", tone: "Firm" },
-  { value: "Aoede", label: "Aoede", tone: "Breezy" },
-  { value: "Callirrhoe", label: "Callirrhoe", tone: "Easy-going" },
-  { value: "Autonoe", label: "Autonoe", tone: "Bright" },
-  { value: "Enceladus", label: "Enceladus", tone: "Breathy" },
-  { value: "Iapetus", label: "Iapetus", tone: "Clear" },
-  { value: "Umbriel", label: "Umbriel", tone: "Easy-going" },
-  { value: "Algieba", label: "Algieba", tone: "Smooth" },
-  { value: "Despina", label: "Despina", tone: "Smooth" },
-  { value: "Erinome", label: "Erinome", tone: "Clear" },
-  { value: "Algenib", label: "Algenib", tone: "Gravelly" },
-  { value: "Rasalgethi", label: "Rasalgethi", tone: "Informative" },
-  { value: "Laomedeia", label: "Laomedeia", tone: "Upbeat" },
-  { value: "Achernar", label: "Achernar", tone: "Soft" },
-  { value: "Alnilam", label: "Alnilam", tone: "Firm" },
-  { value: "Schedar", label: "Schedar", tone: "Even" },
-  { value: "Gacrux", label: "Gacrux", tone: "Mature" },
-  { value: "Pulcherrima", label: "Pulcherrima", tone: "Forward" },
-  { value: "Achird", label: "Achird", tone: "Friendly" },
-  { value: "Zubenelgenubi", label: "Zubenelgenubi", tone: "Casual" },
-  { value: "Vindemiatrix", label: "Vindemiatrix", tone: "Gentle" },
-  { value: "Sadachbia", label: "Sadachbia", tone: "Lively" },
-  { value: "Sadaltager", label: "Sadaltager", tone: "Knowledgeable" },
-  { value: "Sulafat", label: "Sulafat", tone: "Warm" },
+  {
+    value: "professional",
+    label: "Professional",
+    description: "Clear, concise, business-appropriate",
+    icon: "💼",
+    voices: [
+      { value: "Kore", tone: "Firm" },
+      { value: "Orus", tone: "Firm" },
+      { value: "Alnilam", tone: "Firm" },
+      { value: "Charon", tone: "Informative" },
+      { value: "Rasalgethi", tone: "Informative" },
+      { value: "Schedar", tone: "Even" },
+      { value: "Pulcherrima", tone: "Forward" },
+      { value: "Gacrux", tone: "Mature" },
+      { value: "Sadaltager", tone: "Knowledgeable" },
+    ],
+  },
+  {
+    value: "friendly",
+    label: "Friendly",
+    description: "Warm, casual, relationship-first approach",
+    icon: "😊",
+    voices: [
+      { value: "Achird", tone: "Friendly" },
+      { value: "Sulafat", tone: "Warm" },
+      { value: "Puck", tone: "Upbeat" },
+      { value: "Laomedeia", tone: "Upbeat" },
+      { value: "Callirrhoe", tone: "Easy-going" },
+      { value: "Umbriel", tone: "Easy-going" },
+      { value: "Zubenelgenubi", tone: "Casual" },
+      { value: "Vindemiatrix", tone: "Gentle" },
+      { value: "Achernar", tone: "Soft" },
+      { value: "Sadachbia", tone: "Lively" },
+    ],
+  },
+  {
+    value: "technical",
+    label: "Technical",
+    description: "Detailed, precise, domain-expert style",
+    icon: "🔧",
+    voices: [
+      { value: "Iapetus", tone: "Clear" },
+      { value: "Erinome", tone: "Clear" },
+      { value: "Charon", tone: "Informative" },
+      { value: "Rasalgethi", tone: "Informative" },
+      { value: "Sadaltager", tone: "Knowledgeable" },
+      { value: "Gacrux", tone: "Mature" },
+      { value: "Schedar", tone: "Even" },
+    ],
+  },
+  {
+    value: "concise",
+    label: "Concise",
+    description: "Short answers, straight to the point",
+    icon: "⚡",
+    voices: [
+      { value: "Kore", tone: "Firm" },
+      { value: "Orus", tone: "Firm" },
+      { value: "Alnilam", tone: "Firm" },
+      { value: "Iapetus", tone: "Clear" },
+      { value: "Erinome", tone: "Clear" },
+      { value: "Schedar", tone: "Even" },
+    ],
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Write your own instructions below",
+    icon: "✏️",
+    voices: [
+      { value: "Kore", tone: "Firm" },
+      { value: "Puck", tone: "Upbeat" },
+      { value: "Charon", tone: "Informative" },
+      { value: "Zephyr", tone: "Bright" },
+      { value: "Fenrir", tone: "Excitable" },
+      { value: "Leda", tone: "Youthful" },
+      { value: "Orus", tone: "Firm" },
+      { value: "Aoede", tone: "Breezy" },
+      { value: "Callirrhoe", tone: "Easy-going" },
+      { value: "Autonoe", tone: "Bright" },
+      { value: "Enceladus", tone: "Breathy" },
+      { value: "Iapetus", tone: "Clear" },
+      { value: "Umbriel", tone: "Easy-going" },
+      { value: "Algieba", tone: "Smooth" },
+      { value: "Despina", tone: "Smooth" },
+      { value: "Erinome", tone: "Clear" },
+      { value: "Algenib", tone: "Gravelly" },
+      { value: "Rasalgethi", tone: "Informative" },
+      { value: "Laomedeia", tone: "Upbeat" },
+      { value: "Achernar", tone: "Soft" },
+      { value: "Alnilam", tone: "Firm" },
+      { value: "Schedar", tone: "Even" },
+      { value: "Gacrux", tone: "Mature" },
+      { value: "Pulcherrima", tone: "Forward" },
+      { value: "Achird", tone: "Friendly" },
+      { value: "Zubenelgenubi", tone: "Casual" },
+      { value: "Vindemiatrix", tone: "Gentle" },
+      { value: "Sadachbia", tone: "Lively" },
+      { value: "Sadaltager", tone: "Knowledgeable" },
+      { value: "Sulafat", tone: "Warm" },
+    ],
+  },
 ];
 
 const ConfigSection = ({ onApply }: ConfigSectionProps) => {
@@ -66,10 +129,17 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
+  const handlePersonaChange = (value: string) => {
+    setPersona(value);
+    const selected = PERSONA_OPTIONS.find((p) => p.value === value);
+    if (selected && !selected.voices.some((v) => v.value === voiceName)) {
+      setVoiceName(selected.voices[0].value);
+    }
+  };
+
   const handleApply = () => {
-    const personaPrefix = persona !== "custom"
-      ? `You are a ${persona} AI assistant. `
-      : "";
+    const personaPrefix =
+      persona !== "custom" ? `You are a ${persona} AI assistant. ` : "";
     onApply({
       model,
       systemInstructions: personaPrefix + systemInstructions,
@@ -81,6 +151,8 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
     });
     setOpen(false);
   };
+
+  const activePersona = PERSONA_OPTIONS.find((p) => p.value === persona)!;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -116,53 +188,52 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
             />
           </div>
 
-          {/* Persona Style */}
+          {/* Persona Style with grouped voices */}
           <div className="space-y-3">
             <Label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Sparkles className="h-4 w-4 text-primary" />
-              Persona Style
+              Persona &amp; Voice
             </Label>
             <div className="flex flex-col gap-2">
               {PERSONA_OPTIONS.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => setPersona(p.value)}
-                  className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-all ${
-                    persona === p.value
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
-                  }`}
-                >
-                  <span className="text-lg shrink-0">{p.icon}</span>
-                  <div>
-                    <span className="font-semibold text-sm">{p.label}</span>
-                    <span className="text-xs text-muted-foreground ml-2">— {p.description}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+                <div key={p.value} className="flex flex-col">
+                  <button
+                    onClick={() => handlePersonaChange(p.value)}
+                    className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-all ${
+                      persona === p.value
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                    }`}
+                  >
+                    <span className="text-lg shrink-0">{p.icon}</span>
+                    <div>
+                      <span className="font-semibold text-sm">{p.label}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        — {p.description}
+                      </span>
+                    </div>
+                  </button>
 
-          {/* Voice Selection */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Users className="h-4 w-4 text-primary" />
-              Voice
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
-              {VOICE_OPTIONS.map((voice) => (
-                <button
-                  key={voice.value}
-                  onClick={() => setVoiceName(voice.value)}
-                  className={`rounded-lg border px-3 py-2.5 text-sm text-center transition-all ${
-                    voiceName === voice.value
-                      ? "border-primary bg-primary/10 text-foreground font-semibold"
-                      : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
-                  }`}
-                >
-                  {voice.label}{" "}
-                  <span className="text-xs opacity-70">({voice.tone})</span>
-                </button>
+                  {/* Voice chips shown when this persona is selected */}
+                  {persona === p.value && (
+                    <div className="flex flex-wrap gap-1.5 pt-2 pb-1 pl-10">
+                      {p.voices.map((voice) => (
+                        <button
+                          key={voice.value}
+                          onClick={() => setVoiceName(voice.value)}
+                          className={`rounded-full border px-3 py-1 text-xs transition-all ${
+                            voiceName === voice.value
+                              ? "border-primary bg-primary/15 text-foreground font-semibold"
+                              : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                          }`}
+                        >
+                          {voice.value}{" "}
+                          <span className="opacity-60">· {voice.tone}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
