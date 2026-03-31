@@ -52,8 +52,8 @@ export default {
           "50%": { boxShadow: "0 0 40px hsl(142 60% 50% / 0.5)" },
         },
         "slide-down-fade": {
-          "0%": { opacity: "0", transform: "translate(-50%, calc(-50% - 12px))" },
-          "100%": { opacity: "1", transform: "translate(-50%, -50%)" },
+          "0%": { opacity: "0", transform: "translateY(-12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
