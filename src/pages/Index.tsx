@@ -17,7 +17,7 @@ const Index = () => {
   });
 
   return (
-    <div className="flex flex-col min-h-screen w-full overflow-x-hidden">
+    <div className="flex flex-col min-h-screen w-full overflow-x-hidden animate-fade-in">
       <TestingArea status={status} logs={logs} onStart={start} onStop={stop} />
       <ConfigSection onApply={setConfig} />
     </div>
