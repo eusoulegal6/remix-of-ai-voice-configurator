@@ -112,7 +112,6 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
       title: "Configuration Applied",
       description: "Your settings have been saved.",
     });
-    setHasApplied(true);
     setOpen(false);
   };
 
