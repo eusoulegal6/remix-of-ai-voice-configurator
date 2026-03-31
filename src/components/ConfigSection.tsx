@@ -1,13 +1,29 @@
 import { useState } from "react";
-import { Settings, Save, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, X, ShieldCheck, Save, MessageSquare, Globe, Sparkles, Users } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface ConfigSectionProps {
   onApply: (config: { model: string; systemInstructions: string; voiceName: string }) => void;
 }
+
+const PERSONA_OPTIONS = [
+  { value: "professional", label: "Professional", description: "Clear, concise, business-appropriate", icon: "💼" },
+  { value: "friendly", label: "Friendly", description: "Warm, casual, relationship-first approach", icon: "😊" },
+  { value: "technical", label: "Technical", description: "Detailed, precise, domain-expert style", icon: "🔧" },
+  { value: "concise", label: "Concise", description: "Short answers, straight to the point", icon: "⚡" },
+  { value: "custom", label: "Custom", description: "Write your own instructions below", icon: "✏️" },
+];
 
 const VOICE_OPTIONS = [
   { value: "Kore", label: "Kore", tone: "Firm" },
@@ -46,32 +62,112 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
   const [model] = useState("gemini-3.1-flash-live-preview");
   const [systemInstructions, setSystemInstructions] = useState("");
   const [voiceName, setVoiceName] = useState("Kore");
-  const [isOpen, setIsOpen] = useState(false);
+  const [persona, setPersona] = useState("professional");
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
   const handleApply = () => {
-    onApply({ model, systemInstructions, voiceName });
-    toast({
-      title: "Settings Saved",
-      description: "Your configuration has been applied.",
+    const personaPrefix = persona !== "custom"
+      ? `You are a ${persona} AI assistant. `
+      : "";
+    onApply({
+      model,
+      systemInstructions: personaPrefix + systemInstructions,
+      voiceName,
     });
+    toast({
+      title: "Configuration Applied",
+      description: "Your settings have been saved.",
+    });
+    setOpen(false);
   };
 
   return (
-    <div className="w-full px-4 pb-6">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full py-3 text-muted-foreground"
-      >
-        <div className="flex items-center gap-2">
-          <Settings className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">Configuration</span>
-        </div>
-        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="fixed bottom-6 right-6 gap-2 z-50 shadow-lg border-border bg-card hover:bg-secondary"
+        >
+          <Settings className="h-4 w-4" />
+          Configure
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[540px] max-h-[85vh] overflow-y-auto bg-card border-border p-0">
+        <DialogHeader className="px-6 pt-6 pb-2">
+          <DialogTitle className="text-xl font-bold text-foreground">
+            Configure Your AI Assistant
+          </DialogTitle>
+        </DialogHeader>
 
-      {isOpen && (
-        <div className="flex flex-col gap-4 pt-2">
+        <div className="px-6 pb-6 flex flex-col gap-6">
+          {/* System Instructions */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              System Instructions
+            </Label>
+            <Textarea
+              value={systemInstructions}
+              onChange={(e) => setSystemInstructions(e.target.value)}
+              placeholder='e.g. "You are a helpful customer support agent for our SaaS product"'
+              className="min-h-[80px] bg-muted border-border text-sm resize-none"
+            />
+          </div>
+
+          {/* Persona Style */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Persona Style
+            </Label>
+            <div className="flex flex-col gap-2">
+              {PERSONA_OPTIONS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() => setPersona(p.value)}
+                  className={`flex items-center gap-3 w-full rounded-lg border px-4 py-3 text-left transition-all ${
+                    persona === p.value
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                  }`}
+                >
+                  <span className="text-lg shrink-0">{p.icon}</span>
+                  <div>
+                    <span className="font-semibold text-sm">{p.label}</span>
+                    <span className="text-xs text-muted-foreground ml-2">— {p.description}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Voice Selection */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Users className="h-4 w-4 text-primary" />
+              Voice
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              {VOICE_OPTIONS.map((voice) => (
+                <button
+                  key={voice.value}
+                  onClick={() => setVoiceName(voice.value)}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-center transition-all ${
+                    voiceName === voice.value
+                      ? "border-primary bg-primary/10 text-foreground font-semibold"
+                      : "border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                  }`}
+                >
+                  {voice.label}{" "}
+                  <span className="text-xs opacity-70">({voice.tone})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Security Note */}
           <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
             <ShieldCheck className="h-4 w-4 text-accent-foreground shrink-0" />
             <span className="text-xs text-accent-foreground">
@@ -79,44 +175,14 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
             </span>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="voice-name" className="text-sm text-muted-foreground">
-              Voice
-            </Label>
-            <select
-              id="voice-name"
-              value={voiceName}
-              onChange={(e) => setVoiceName(e.target.value)}
-              className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none"
-            >
-              {VOICE_OPTIONS.map((voice) => (
-                <option key={voice.value} value={voice.value}>
-                  {voice.label} - {voice.tone}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="system-instructions" className="text-sm text-muted-foreground">
-              Knowledge Base / System Instructions
-            </Label>
-            <Textarea
-              id="system-instructions"
-              value={systemInstructions}
-              onChange={(e) => setSystemInstructions(e.target.value)}
-              placeholder="Paste company policies, support docs, or custom instructions here…"
-              className="min-h-[120px] bg-muted border-border text-sm resize-none"
-            />
-          </div>
-
+          {/* Apply Button */}
           <Button onClick={handleApply} className="w-full gap-2">
             <Save className="h-4 w-4" />
             Apply Configuration
           </Button>
         </div>
-      )}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
