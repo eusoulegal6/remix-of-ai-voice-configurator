@@ -90,7 +90,7 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
   const [persona, setPersona] = useState("professional");
   const [open, setOpen] = useState(true);
   const [hasApplied, setHasApplied] = useState(false);
-  const [open, setOpen] = useState(false);
+  
   const { toast } = useToast();
 
   const handlePersonaChange = (value: string) => {
