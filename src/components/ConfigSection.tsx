@@ -128,7 +128,7 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
           Configure
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[540px] max-h-[85vh] overflow-y-auto bg-card border-border p-0 animate-slide-down-fade">
+      <DialogContent className="sm:max-w-[540px] max-h-[85vh] overflow-y-auto scrollbar-none bg-card border-border p-0 animate-slide-down-fade">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-xl font-bold text-foreground">
             Configure Your AI Assistant
