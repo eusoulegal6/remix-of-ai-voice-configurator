@@ -172,7 +172,20 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
     addLog("Requesting microphone access…");
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaDevices = navigator.mediaDevices;
+      if (!mediaDevices?.getUserMedia) {
+        let message = "Microphone access is not available in this browser context.";
+
+        if (!window.isSecureContext) {
+          message = "Microphone access requires HTTPS or localhost.";
+        } else if (window.self !== window.top) {
+          message = "Microphone access is blocked in this embedded preview. Open the app in a new tab or published URL.";
+        }
+
+        throw new Error(message);
+      }
+
+      const stream = await mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       addLog("Microphone access granted");
 
@@ -181,12 +194,14 @@ export function useGeminiAudio({ model, systemInstructions }: UseGeminiAudioOpti
       audioContextRef.current = audioCtx;
       addLog(`AudioContext running at ${audioCtx.sampleRate}Hz`);
 
+      const configuredProxyUrl = import.meta.env.VITE_GEMINI_WS_URL || "";
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-      if (!baseUrl) throw new Error("Backend URL is missing");
+      const targetUrl = configuredProxyUrl || `${baseUrl}/functions/v1/gemini-ws`;
+      if (!targetUrl) throw new Error("Backend URL is missing");
 
-      const wsUrl = `${baseUrl
+      const wsUrl = targetUrl
         .replace(/^https:\/\//, "wss://")
-        .replace(/^http:\/\//, "ws://")}/functions/v1/gemini-ws`;
+        .replace(/^http:\/\//, "ws://");
 
       addLog(`Connecting to proxy: ${wsUrl}`);
       const ws = new WebSocket(wsUrl);
