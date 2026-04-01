@@ -6,37 +6,38 @@
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 90%;
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 90%;
-    --popover: 220 18% 10%;
-    --popover-foreground: 210 20% 90%;
-    --primary: 36 95% 50%;
-    --primary-foreground: 220 20% 7%;
-    --secondary: 220 16% 16%;
-    --secondary-foreground: 210 20% 80%;
-    --muted: 220 14% 14%;
-    --muted-foreground: 215 12% 50%;
-    --accent: 36 40% 20%;
-    --accent-foreground: 36 95% 70%;
-    --destructive: 0 70% 55%;
+    --background: 230 20% 8%;
+    --foreground: 220 15% 88%;
+    --card: 230 18% 11%;
+    --card-foreground: 220 15% 88%;
+    --popover: 230 18% 11%;
+    --popover-foreground: 220 15% 88%;
+    --primary: 250 60% 68%;
+    --primary-foreground: 230 20% 8%;
+    --secondary: 230 16% 16%;
+    --secondary-foreground: 220 15% 78%;
+    --muted: 230 14% 14%;
+    --muted-foreground: 225 12% 48%;
+    --accent: 190 40% 18%;
+    --accent-foreground: 185 55% 65%;
+    --destructive: 0 60% 55%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 36 95% 50%;
+    --border: 230 14% 18%;
+    --input: 230 14% 18%;
+    --ring: 250 60% 68%;
     --radius: 0.75rem;
-    --sidebar-background: 220 20% 9%;
-    --sidebar-foreground: 210 20% 80%;
-    --sidebar-primary: 36 95% 50%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 16% 14%;
-    --sidebar-accent-foreground: 210 20% 80%;
-    --sidebar-border: 220 14% 16%;
-    --sidebar-ring: 36 95% 50%;
+    --sidebar-background: 230 20% 9%;
+    --sidebar-foreground: 220 15% 78%;
+    --sidebar-primary: 250 60% 68%;
+    --sidebar-primary-foreground: 230 20% 8%;
+    --sidebar-accent: 230 16% 14%;
+    --sidebar-accent-foreground: 220 15% 78%;
+    --sidebar-border: 230 14% 16%;
+    --sidebar-ring: 250 60% 68%;
 
-    --glow-primary: 0 0 20px hsl(36 95% 50% / 0.3);
-    --glow-primary-strong: 0 0 40px hsl(36 95% 50% / 0.4);
+    --glow-primary: 0 0 20px hsl(250 60% 68% / 0.2);
+    --glow-primary-strong: 0 0 40px hsl(250 60% 68% / 0.3);
+    --glow-accent: 0 0 20px hsl(185 55% 55% / 0.2);
   }
 }
 
@@ -55,6 +56,9 @@
   }
   .glow-primary-strong {
     box-shadow: var(--glow-primary-strong);
+  }
+  .glow-accent {
+    box-shadow: var(--glow-accent);
   }
   .scrollbar-none {
     -ms-overflow-style: none;
