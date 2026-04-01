@@ -55,31 +55,18 @@ const FEATURES = [
 const STEPS = [
   {
     step: "01",
-    title: "Define",
-    description: "Configure your agent's personality, voice, and knowledge base with a simple config object.",
-    code: `{
-  model: "gemini-3.1-flash",
-  voice: "Kore",
-  instructions: "You are a helpful..."
-}`,
+    title: "Add Knowledge",
+    description: "Paste your company docs, FAQs, support policies, or custom instructions into the knowledge base.",
   },
   {
     step: "02",
-    title: "Configure",
-    description: "Add tools, webhooks, and conversation flows. Test in the playground before going live.",
-    code: `agent.addTool("lookup_order", {
-  description: "Find order status",
-  handler: async (id) => db.find(id)
-})`,
+    title: "Apply Settings",
+    description: "Hit Apply — your agent is configured instantly. The AI model and API key are handled securely for you.",
   },
   {
     step: "03",
-    title: "Deploy",
-    description: "Ship to production with one command. Scale automatically from 1 to 10,000 concurrent calls.",
-    code: `$ voicebuddy deploy --prod
-✓ Agent live at +1 (555) 0123
-✓ Webhook configured
-✓ Analytics streaming`,
+    title: "Start Talking",
+    description: "Press the mic button and have a live conversation with your agent. Test, iterate, and refine in real time.",
   },
 ];
 
