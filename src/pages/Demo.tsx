@@ -21,6 +21,14 @@ const Demo = () => {
 
   return (
     <div className="flex min-h-dvh w-full flex-col overflow-x-hidden animate-slide-down-fade">
+      <div className="absolute top-4 left-4 z-10">
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/">
+            <ArrowLeft className="mr-1" />
+            Back
+          </Link>
+        </Button>
+      </div>
       <TestingArea
         status={status}
         logs={logs}
