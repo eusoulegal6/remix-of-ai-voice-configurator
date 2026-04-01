@@ -1,5 +1,6 @@
 import { Mic, MicOff, RefreshCw, ShieldCheck, Volume2, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import InstallPrompt from "@/components/InstallPrompt";
 import type {
   ConnectionStatus,
   PermissionState,
@@ -146,6 +147,8 @@ const TestingArea = ({
           )}
         </div>
       </section>
+
+      <InstallPrompt />
 
       <section className="w-full max-w-2xl rounded-xl border border-border bg-card/60 p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between">
