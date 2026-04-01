@@ -122,13 +122,13 @@ const ConfigSection = ({ onApply }: ConfigSectionProps) => {
         <Button
           variant="outline"
           size="sm"
-          className="fixed bottom-6 right-6 gap-2 z-50 shadow-lg border-border bg-card hover:bg-secondary"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 w-[calc(100%-2rem)] gap-2 border-border bg-card shadow-lg hover:bg-secondary sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6 sm:w-auto"
         >
           <Settings className="h-4 w-4" />
           Configure
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[540px] max-h-[85vh] overflow-y-auto scrollbar-none bg-card border-border p-0 animate-slide-down-fade">
+      <DialogContent className="max-h-[85vh] w-[calc(100%-1rem)] overflow-y-auto rounded-2xl border-border bg-card p-0 scrollbar-none animate-slide-down-fade sm:max-w-[540px]">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-xl font-bold text-foreground">
             Configure Your AI Assistant

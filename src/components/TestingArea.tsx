@@ -40,7 +40,7 @@ const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
   };
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center p-8 gap-10">
+    <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6 sm:gap-10 sm:p-8">
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
         <span className={`text-sm font-medium ${color}`}>{label}</span>
@@ -49,7 +49,7 @@ const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
       <div className="flex items-center gap-4">
         <button
           onClick={handleClick}
-          className={`group relative h-36 w-36 rounded-full border-2 flex items-center justify-center transition-all active:scale-95 ${
+          className={`group relative flex h-28 w-28 items-center justify-center rounded-full border-2 transition-all active:scale-95 sm:h-36 sm:w-36 ${
             isActive
               ? "bg-destructive/20 border-destructive"
               : "bg-secondary border-border hover:border-primary"
@@ -60,12 +60,12 @@ const TestingArea = ({ status, logs, onStart, onStop }: TestingAreaProps) => {
           ) : (
             <Mic className="h-12 w-12 text-muted-foreground group-hover:text-primary transition-colors" />
           )}
-          <span className="absolute -bottom-8 text-xs text-muted-foreground font-medium">
+          <span className="absolute -bottom-7 text-xs font-medium text-muted-foreground sm:-bottom-8">
             {isActive ? "Stop Conversation" : "Start Conversation"}
           </span>
         </button>
       </div>
-      <section className="w-full max-w-2xl rounded-xl border border-border bg-card/60 p-4">
+      <section className="w-full max-w-2xl rounded-xl border border-border bg-card/60 p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Connection Logs</h2>
           <span className="text-xs text-muted-foreground">

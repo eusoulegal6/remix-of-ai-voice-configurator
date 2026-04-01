@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const MIC_CAPTURE_WORKLET_URL = "/audio-worklets/mic-capture-processor.js";
 
@@ -23,7 +23,7 @@ function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
   let offset = 0;
 
   for (let i = 0; i < float32Array.length; i++, offset += 2) {
-    let s = Math.max(-1, Math.min(1, float32Array[i]));
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
 
@@ -40,6 +40,14 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   }
 
   return window.btoa(binary);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error";
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
@@ -71,6 +79,9 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const connectTimeoutRef = useRef<number | null>(null);
   const streamReadyTimeoutRef = useRef<number | null>(null);
   const isReadyToStreamRef = useRef(false);
+  const lifecycleStopRequestedRef = useRef(false);
+  const statusRef = useRef<ConnectionStatus>("disconnected");
+  const stopRef = useRef<() => void>(() => {});
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -103,13 +114,26 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     nextPlayTimeRef.current = 0;
   }, []);
 
+  const ensurePlaybackContext = useCallback(async () => {
+    if (!playbackCtxRef.current) {
+      playbackCtxRef.current = new AudioContext({ sampleRate: 24000 });
+    }
+
+    if (playbackCtxRef.current.state === "suspended") {
+      await playbackCtxRef.current.resume();
+    }
+
+    return playbackCtxRef.current;
+  }, []);
+
   const playAudioChunk = useCallback((base64Data: string) => {
     try {
-      if (!playbackCtxRef.current) {
-        playbackCtxRef.current = new AudioContext({ sampleRate: 24000 });
+      const ctx = playbackCtxRef.current;
+      if (!ctx) {
+        console.warn("Playback context is not ready yet.");
+        return;
       }
 
-      const ctx = playbackCtxRef.current;
       const binaryStr = atob(base64Data);
       const bytes = new Uint8Array(binaryStr.length);
 
@@ -206,6 +230,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const start = useCallback(async () => {
     if (status !== "disconnected") return;
 
+    lifecycleStopRequestedRef.current = false;
     setStatus("connecting");
     setLogs([]);
     addLog("Requesting microphone access…");
@@ -238,6 +263,9 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       if (audioCtx.state === "suspended") await audioCtx.resume();
       audioContextRef.current = audioCtx;
       addLog(`AudioContext running at ${audioCtx.sampleRate}Hz`);
+
+      await ensurePlaybackContext();
+      addLog("Playback context ready");
 
       const configuredProxyUrl = import.meta.env.VITE_GEMINI_WS_URL || "";
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -341,8 +369,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
             addLog("[Gemini] Setup Complete received");
             try {
               await startAudioCapture(audioCtx, stream, ws);
-            } catch (err: any) {
-              addLog(`Error: ${err.message}`, "error");
+            } catch (err) {
+              addLog(`Error: ${getErrorMessage(err)}`, "error");
               ws.close(1011, "Audio capture setup failed");
               return;
             }
@@ -399,9 +427,9 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
         );
         setStatus("disconnected");
       };
-    } catch (err: any) {
+    } catch (err) {
       clearConnectTimeout();
-      addLog(`Error: ${err.message}`, "error");
+      addLog(`Error: ${getErrorMessage(err)}`, "error");
       setStatus("disconnected");
     }
   }, [
@@ -414,6 +442,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     playAudioChunk,
     clearConnectTimeout,
     clearStreamReadyTimeout,
+    ensurePlaybackContext,
     startAudioCapture,
   ]);
 
@@ -442,6 +471,53 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     setStatus("disconnected");
     addLog("Conversation ended");
   }, [addLog, clearConnectTimeout, clearStreamReadyTimeout, interruptPlayback]);
+
+  useEffect(() => {
+    statusRef.current = status;
+
+    if (status === "disconnected") {
+      lifecycleStopRequestedRef.current = false;
+    }
+  }, [status]);
+
+  useEffect(() => {
+    stopRef.current = stop;
+  }, [stop]);
+
+  useEffect(() => {
+    const endSessionForLifecycle = (message: string) => {
+      if (statusRef.current === "disconnected" || lifecycleStopRequestedRef.current) {
+        return;
+      }
+
+      lifecycleStopRequestedRef.current = true;
+      addLog(message);
+      stopRef.current();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        endSessionForLifecycle("App moved to background, ending session");
+      }
+    };
+
+    const handlePageHide = () => {
+      endSessionForLifecycle("Page is unloading, ending session");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+
+      if (statusRef.current !== "disconnected") {
+        lifecycleStopRequestedRef.current = true;
+        stopRef.current();
+      }
+    };
+  }, [addLog]);
 
   return { status, logs, start, stop };
 }
