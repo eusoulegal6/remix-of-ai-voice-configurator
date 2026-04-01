@@ -1,71 +1,103 @@
-import { ArrowRight, Phone, PhoneIncoming, Brain, Clock, FileText, BarChart3, Shield, AudioWaveform, Zap, CheckCircle2, Rocket } from "lucide-react";
+import { ArrowRight, Code2, Mic, Settings2, Rocket, Globe, Webhook, BarChart3, Shield, Cpu, Zap, CheckCircle2, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
+  { label: "How It Works", href: "#how-it-works" },
   { label: "Pricing", href: "#pricing" },
   { label: "Demo", href: "/demo" },
 ];
 
 const FEATURES = [
   {
-    icon: Phone,
-    title: "Outbound Sales Calls",
-    description: "Proactively reach prospects with persuasive, natural conversations that convert. Your AI never gets rejected — it persists intelligently.",
+    icon: Mic,
+    title: "Custom Voices",
+    description: "Choose from a library of natural-sounding voices or clone your own for a fully branded agent experience.",
   },
   {
-    icon: PhoneIncoming,
-    title: "Inbound Support & Sales",
-    description: "Answer every call instantly. Qualify leads, handle objections, and close deals — or resolve support tickets with empathy and speed.",
+    icon: Code2,
+    title: "Config-First Design",
+    description: "Define agent behavior with a simple config object — system prompts, voice, model, and tools in one place.",
   },
   {
-    icon: Brain,
-    title: "Master Persuasion AI",
-    description: "Trained on proven sales methodologies from legendary closers. Handles objections, creates urgency, and guides prospects to yes.",
+    icon: Cpu,
+    title: "Multi-Model Support",
+    description: "Swap between Gemini, GPT, and more. Pick the right model for cost, latency, or reasoning needs.",
   },
   {
-    icon: Clock,
-    title: "24/7 Availability",
-    description: "No sick days. No holidays. No coffee breaks. Your AI salesperson works around the clock across every timezone.",
+    icon: Globe,
+    title: "Multi-Language",
+    description: "Deploy agents that understand and speak 30+ languages with automatic detection and seamless switching.",
   },
   {
-    icon: FileText,
-    title: "Custom Knowledge Base",
-    description: "Upload your sales docs, FAQs, and product info. The AI learns your business and speaks your language.",
+    icon: Webhook,
+    title: "Webhook Events",
+    description: "Get real-time callbacks for call events — transcripts, sentiment, intent, and custom triggers.",
   },
   {
     icon: BarChart3,
-    title: "Real-Time Analytics",
-    description: "Track every call, conversion, and conversation. Get insights into what's working and optimize your pitch.",
+    title: "Usage Analytics",
+    description: "Track call volume, latency, token usage, and conversation quality from a unified dashboard.",
   },
   {
     icon: Shield,
     title: "Enterprise Security",
-    description: "Bank-level encryption. SOC 2 compliance. Your data and your customers' data is always protected.",
+    description: "End-to-end encryption, SOC 2 compliance, and role-based access for production deployments.",
   },
   {
-    icon: AudioWaveform,
-    title: "Human-Like Voice",
-    description: "Ultra-realistic AI voice that sounds natural, empathetic, and persuasive. Callers won't know the difference.",
+    icon: Settings2,
+    title: "Knowledge Injection",
+    description: "Upload docs, FAQs, and product data. Your agent learns your domain and answers with authority.",
+  },
+];
+
+const STEPS = [
+  {
+    step: "01",
+    title: "Define",
+    description: "Configure your agent's personality, voice, and knowledge base with a simple config object.",
+    code: `{
+  model: "gemini-3.1-flash",
+  voice: "Kore",
+  instructions: "You are a helpful..."
+}`,
+  },
+  {
+    step: "02",
+    title: "Configure",
+    description: "Add tools, webhooks, and conversation flows. Test in the playground before going live.",
+    code: `agent.addTool("lookup_order", {
+  description: "Find order status",
+  handler: async (id) => db.find(id)
+})`,
+  },
+  {
+    step: "03",
+    title: "Deploy",
+    description: "Ship to production with one command. Scale automatically from 1 to 10,000 concurrent calls.",
+    code: `$ voicebuddy deploy --prod
+✓ Agent live at +1 (555) 0123
+✓ Webhook configured
+✓ Analytics streaming`,
   },
 ];
 
 const PRICING_FEATURES = [
-  "Unlimited AI sales & support agents",
-  "Inbound & outbound calling",
-  "Custom knowledge base upload",
-  "Real-time call analytics",
-  "Human-like AI voice",
-  "24/7 availability",
-  "CRM integrations",
+  "Unlimited voice agents",
+  "All voices included",
+  "Custom knowledge base",
+  "Real-time analytics",
+  "Webhook integrations",
+  "Multi-language support",
+  "99.9% uptime SLA",
   "Priority support",
 ];
 
 const STATS = [
-  { value: "24/7", label: "Always On" },
-  { value: "$0.15", label: "Per Minute" },
-  { value: "∞", label: "Scalability" },
+  { value: "<200ms", label: "Latency" },
+  { value: "30+", label: "Languages" },
+  { value: "99.9%", label: "Uptime" },
 ];
 
 const LandingPage = () => {
@@ -76,7 +108,7 @@ const LandingPage = () => {
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="text-xl font-bold text-primary">Salesman.ac</span>
+          <span className="text-xl font-bold text-primary">VoiceBuddy</span>
           <div className="hidden items-center gap-8 sm:flex">
             {NAV_LINKS.map((link) => (
               <a
@@ -106,18 +138,18 @@ const LandingPage = () => {
 
       {/* Hero */}
       <section className="flex flex-col items-center px-6 pb-20 pt-24 text-center sm:pt-32 animate-slide-down-fade">
-        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-          <Zap className="h-4 w-4" />
-          AI-Powered Sales & Support Calls
+        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
+          <Terminal className="h-4 w-4" />
+          Programmable AI Voice Agents
         </span>
         <h1 className="max-w-3xl text-4xl font-bold leading-tight sm:text-6xl">
-          Your AI Salesperson{" "}
-          <span className="text-primary">Never Sleeps.</span>
+          Build Voice Agents in{" "}
+          <span className="text-primary">Minutes, Not Months.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-base text-muted-foreground sm:text-lg">
-          Automated AI calling for inbound & outbound sales and customer support.
-          Trained in the persuasion techniques of the world's greatest closers.
-          Handles calls 24/7 at a fraction of the cost.
+          A developer-friendly platform for creating, configuring, and deploying
+          AI voice agents. Define behavior with config, inject knowledge, and
+          scale to thousands of concurrent conversations.
         </p>
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
           <Button
@@ -125,7 +157,7 @@ const LandingPage = () => {
             size="lg"
             className="gap-2 rounded-full px-8 text-base"
           >
-            <Phone className="h-4 w-4" />
+            <Mic className="h-4 w-4" />
             Try Live Demo
             <ArrowRight className="h-4 w-4" />
           </Button>
@@ -133,9 +165,9 @@ const LandingPage = () => {
             variant="outline"
             size="lg"
             className="rounded-full px-8 text-base"
-            onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}
+            onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
           >
-            View Pricing
+            See How It Works
           </Button>
         </div>
 
@@ -150,25 +182,57 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section id="how-it-works" className="px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-16 text-center">
+            <h2 className="text-3xl font-bold sm:text-5xl">
+              Three Steps to a{" "}
+              <span className="text-primary">Live Agent</span>
+            </h2>
+            <p className="mt-4 text-muted-foreground sm:text-lg">
+              From idea to production in under five minutes.
+            </p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {STEPS.map((step) => (
+              <div
+                key={step.step}
+                className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/20"
+              >
+                <span className="mb-3 inline-block text-xs font-bold uppercase tracking-widest text-accent-foreground">
+                  Step {step.step}
+                </span>
+                <h3 className="mb-2 text-xl font-bold">{step.title}</h3>
+                <p className="mb-4 text-sm text-muted-foreground">{step.description}</p>
+                <pre className="overflow-x-auto rounded-lg bg-background p-3 text-xs text-muted-foreground font-mono">
+                  {step.code}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="px-6 py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-bold sm:text-5xl">
-              Everything You Need to{" "}
-              <span className="text-primary">Close More Deals</span>
+              Everything to Build{" "}
+              <span className="text-primary">Production Agents</span>
             </h2>
             <p className="mt-4 text-muted-foreground sm:text-lg">
-              A complete AI-powered calling platform for sales and customer support teams that demand results.
+              A complete toolkit for voice AI — from prototyping to enterprise deployment.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/30"
+                className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/20"
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/30 bg-primary/10">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
                   <feature.icon className="h-5 w-5 text-primary" />
                 </div>
                 <h3 className="mb-2 text-base font-bold">{feature.title}</h3>
@@ -184,29 +248,29 @@ const LandingPage = () => {
         <div className="mx-auto max-w-4xl">
           <div className="mb-16 text-center">
             <h2 className="text-3xl font-bold sm:text-5xl">
-              Simple, <span className="text-primary">Transparent</span> Pricing
+              Simple, <span className="text-primary">Pay-As-You-Go</span> Pricing
             </h2>
             <p className="mt-4 text-muted-foreground sm:text-lg">
-              No hidden fees. No contracts. Pay only for what you use.
+              No contracts. No minimums. Scale up or down as you need.
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-8 sm:p-10">
             <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
               <div className="shrink-0">
-                <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
+                <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                   <Zap className="h-3 w-3" />
-                  Pay As You Go
+                  Usage Based
                 </span>
                 <div className="mt-4 flex items-baseline gap-1">
-                  <span className="text-5xl font-bold text-primary sm:text-6xl">$0.15</span>
+                  <span className="text-5xl font-bold text-primary sm:text-6xl">$0.08</span>
                   <span className="text-lg text-muted-foreground">/min</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Billed per minute of AI call time. That's it.</p>
+                <p className="mt-2 text-sm text-muted-foreground">Per minute of voice agent time. No hidden fees.</p>
                 <Button
                   onClick={() => navigate("/demo")}
                   className="mt-6 rounded-full px-6"
                 >
-                  Get Started Instantly
+                  Start Building Free
                 </Button>
               </div>
               <div className="grid flex-1 gap-3 sm:grid-cols-2">
@@ -224,36 +288,37 @@ const LandingPage = () => {
 
       {/* CTA */}
       <section className="px-6 py-24 text-center">
-        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
+        <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
           <Rocket className="h-4 w-4" />
-          Start in under 5 minutes
+          Developer-first platform
         </span>
         <h2 className="mx-auto max-w-2xl text-3xl font-bold sm:text-5xl">
-          Ready to Let AI{" "}
-          <span className="text-primary">Close Your Deals?</span>
+          Ready to Build Your{" "}
+          <span className="text-primary">Voice Agent?</span>
         </h2>
         <p className="mx-auto mt-6 max-w-xl text-muted-foreground sm:text-lg">
-          Create your account, upload your sales documents, and let your AI salesperson start making calls. It's that simple.
+          Sign up, define your agent config, and deploy to production in minutes.
+          Free tier included — no credit card required.
         </p>
         <Button
           onClick={() => navigate("/demo")}
           size="lg"
           className="mt-10 gap-2 rounded-full px-10 text-base"
         >
-          Create Free Account
+          Get Started Free
           <ArrowRight className="h-4 w-4" />
         </Button>
         <p className="mt-4 text-xs text-muted-foreground">
-          No credit card required • Start with free minutes • Cancel anytime
+          Free tier included • No credit card required • Deploy in minutes
         </p>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <span className="text-sm font-bold text-primary">Salesman.ac</span>
+          <span className="text-sm font-bold text-primary">VoiceBuddy</span>
           <span className="text-xs text-muted-foreground">
-            © 2026 Salesman.ac — AI-Powered Sales & Support
+            © 2026 VoiceBuddy — Programmable AI Voice Agents
           </span>
         </div>
       </footer>

@@ -48,8 +48,8 @@ export default {
         "accordion-down": { from: { height: "0" }, to: { height: "var(--radix-accordion-content-height)" } },
         "accordion-up": { from: { height: "var(--radix-accordion-content-height)" }, to: { height: "0" } },
         "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 20px hsl(36 95% 50% / 0.2)" },
-          "50%": { boxShadow: "0 0 40px hsl(36 95% 50% / 0.5)" },
+          "0%, 100%": { boxShadow: "0 0 20px hsl(250 60% 68% / 0.15)" },
+          "50%": { boxShadow: "0 0 40px hsl(250 60% 68% / 0.35)" },
         },
         "slide-down-fade": {
           "0%": { opacity: "0", transform: "translateY(-30px)" },
