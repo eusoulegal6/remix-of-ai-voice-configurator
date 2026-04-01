@@ -1,6 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const MIC_CAPTURE_WORKLET_URL = "/audio-worklets/mic-capture-processor.js";
+const MOBILE_CAPTURE_FRAME_SIZE = 2048;
+const DEFAULT_CAPTURE_FRAME_SIZE = 4096;
+const WS_BUFFERED_AMOUNT_HIGH_WATER_MARK = 128 * 1024;
+const WS_BUFFERED_AMOUNT_LOW_WATER_MARK = 32 * 1024;
 
 function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
   if (inputSampleRate === 16000) return float32Array;
@@ -50,6 +54,42 @@ function getErrorMessage(error: unknown): string {
   return "Unknown error";
 }
 
+function isLikelyMobileDevice(): boolean {
+  const userAgentData = navigator.userAgentData;
+  if (userAgentData?.mobile) {
+    return true;
+  }
+
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function getPreferredCaptureFrameSize(): number {
+  return isLikelyMobileDevice() ? MOBILE_CAPTURE_FRAME_SIZE : DEFAULT_CAPTURE_FRAME_SIZE;
+}
+
+function getRequestedAudioConstraints(mediaDevices: MediaDevices): MediaTrackConstraints | true {
+  const supported = mediaDevices.getSupportedConstraints();
+  const constraints: MediaTrackConstraints = {};
+
+  if (supported.echoCancellation) {
+    constraints.echoCancellation = true;
+  }
+
+  if (supported.noiseSuppression) {
+    constraints.noiseSuppression = true;
+  }
+
+  if (supported.autoGainControl) {
+    constraints.autoGainControl = true;
+  }
+
+  if (supported.channelCount) {
+    constraints.channelCount = 1;
+  }
+
+  return Object.keys(constraints).length > 0 ? constraints : true;
+}
+
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
 
 interface LogEntry {
@@ -82,6 +122,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const lifecycleStopRequestedRef = useRef(false);
   const statusRef = useRef<ConnectionStatus>("disconnected");
   const stopRef = useRef<() => void>(() => {});
+  const isBackpressuredRef = useRef(false);
+  const droppedChunksRef = useRef(0);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -168,7 +210,12 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     }
   }, []);
 
-  const startAudioCapture = useCallback(async (audioCtx: AudioContext, stream: MediaStream, ws: WebSocket) => {
+  const startAudioCapture = useCallback(async (
+    audioCtx: AudioContext,
+    stream: MediaStream,
+    ws: WebSocket,
+    frameSize: number,
+  ) => {
     if (!("audioWorklet" in audioCtx)) {
       throw new Error("AudioWorklet is not available in this browser.");
     }
@@ -183,7 +230,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       numberOfOutputs: 0,
       channelCount: 1,
       processorOptions: {
-        frameSize: 4096,
+        frameSize,
       },
     });
     processorRef.current = processor;
@@ -219,13 +266,30 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           },
         };
         if (ws.readyState === WebSocket.OPEN) {
+          if (ws.bufferedAmount > WS_BUFFERED_AMOUNT_HIGH_WATER_MARK) {
+            droppedChunksRef.current += 1;
+
+            if (!isBackpressuredRef.current) {
+              isBackpressuredRef.current = true;
+              addLog("Network congestion detected, dropping mic frames", "error");
+            }
+
+            return;
+          }
+
           ws.send(JSON.stringify(payload));
+
+          if (isBackpressuredRef.current && ws.bufferedAmount <= WS_BUFFERED_AMOUNT_LOW_WATER_MARK) {
+            isBackpressuredRef.current = false;
+            addLog(`Mic streaming recovered after dropping ${droppedChunksRef.current} chunk(s)`);
+            droppedChunksRef.current = 0;
+          }
         }
       }
     };
 
     source.connect(processor);
-  }, []);
+  }, [addLog]);
 
   const start = useCallback(async () => {
     if (status !== "disconnected") return;
@@ -250,11 +314,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       }
 
       const stream = await mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: getRequestedAudioConstraints(mediaDevices),
       });
       streamRef.current = stream;
       addLog("Microphone access granted");
@@ -266,6 +326,9 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
       await ensurePlaybackContext();
       addLog("Playback context ready");
+
+      const captureFrameSize = getPreferredCaptureFrameSize();
+      addLog(`Capture frame size: ${captureFrameSize}`);
 
       const configuredProxyUrl = import.meta.env.VITE_GEMINI_WS_URL || "";
       const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -368,7 +431,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           if (data.setupComplete) {
             addLog("[Gemini] Setup Complete received");
             try {
-              await startAudioCapture(audioCtx, stream, ws);
+              await startAudioCapture(audioCtx, stream, ws, captureFrameSize);
             } catch (err) {
               addLog(`Error: ${getErrorMessage(err)}`, "error");
               ws.close(1011, "Audio capture setup failed");
@@ -450,6 +513,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     clearConnectTimeout();
     clearStreamReadyTimeout();
     isReadyToStreamRef.current = false;
+    isBackpressuredRef.current = false;
+    droppedChunksRef.current = 0;
     interruptPlayback();
     if (processorRef.current) {
       processorRef.current.port.onmessage = null;
