@@ -10,7 +10,7 @@ const Index = () => {
     voiceName: "Kore",
   });
 
-  const { status, logs, start, stop } = useGeminiAudio({
+  const { status, logs, sessionIndicators, start, stop, retry } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
     voiceName: config.voiceName,
@@ -18,7 +18,14 @@ const Index = () => {
 
   return (
     <div className="flex min-h-dvh w-full flex-col overflow-x-hidden animate-slide-down-fade">
-      <TestingArea status={status} logs={logs} onStart={start} onStop={stop} />
+      <TestingArea
+        status={status}
+        logs={logs}
+        sessionIndicators={sessionIndicators}
+        onStart={start}
+        onStop={stop}
+        onReconnect={retry}
+      />
       <ConfigSection onApply={setConfig} />
     </div>
   );

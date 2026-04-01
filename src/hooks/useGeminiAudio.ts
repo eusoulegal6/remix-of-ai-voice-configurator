@@ -91,6 +91,20 @@ function getRequestedAudioConstraints(mediaDevices: MediaDevices): MediaTrackCon
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "listening";
+export type PermissionState = "idle" | "requesting" | "granted" | "denied" | "unsupported";
+export type SpeakerState = "idle" | "preparing" | "ready" | "playing" | "blocked";
+export type ReconnectState = "idle" | "reconnecting" | "available";
+
+interface StatusIndicator<TState extends string> {
+  state: TState;
+  detail: string;
+}
+
+export interface SessionIndicators {
+  permission: StatusIndicator<PermissionState>;
+  speaker: StatusIndicator<SpeakerState>;
+  reconnect: StatusIndicator<ReconnectState>;
+}
 
 interface LogEntry {
   timestamp: Date;
@@ -104,9 +118,27 @@ interface UseGeminiAudioOptions {
   voiceName: string;
 }
 
+type DisconnectIntent = "none" | "manual" | "lifecycle" | "cleanup" | "error";
+
+const INITIAL_SESSION_INDICATORS: SessionIndicators = {
+  permission: {
+    state: "idle",
+    detail: "Microphone access has not been requested yet.",
+  },
+  speaker: {
+    state: "idle",
+    detail: "Speaker output will be prepared when a session starts.",
+  },
+  reconnect: {
+    state: "idle",
+    detail: "No reconnect action is needed.",
+  },
+};
+
 export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGeminiAudioOptions) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [sessionIndicators, setSessionIndicators] = useState<SessionIndicators>(INITIAL_SESSION_INDICATORS);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -121,12 +153,33 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const isReadyToStreamRef = useRef(false);
   const lifecycleStopRequestedRef = useRef(false);
   const statusRef = useRef<ConnectionStatus>("disconnected");
-  const stopRef = useRef<() => void>(() => {});
+  const disconnectIntentRef = useRef<DisconnectIntent>("none");
   const isBackpressuredRef = useRef(false);
   const droppedChunksRef = useRef(0);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
+  }, []);
+
+  const setPermissionIndicator = useCallback((state: PermissionState, detail: string) => {
+    setSessionIndicators((prev) => ({
+      ...prev,
+      permission: { state, detail },
+    }));
+  }, []);
+
+  const setSpeakerIndicator = useCallback((state: SpeakerState, detail: string) => {
+    setSessionIndicators((prev) => ({
+      ...prev,
+      speaker: { state, detail },
+    }));
+  }, []);
+
+  const setReconnectIndicator = useCallback((state: ReconnectState, detail: string) => {
+    setSessionIndicators((prev) => ({
+      ...prev,
+      reconnect: { state, detail },
+    }));
   }, []);
 
   const clearConnectTimeout = useCallback(() => {
@@ -172,7 +225,13 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     try {
       const ctx = playbackCtxRef.current;
       if (!ctx) {
+        setSpeakerIndicator("blocked", "Speaker output is not ready. Restart the session from a direct tap.");
         console.warn("Playback context is not ready yet.");
+        return;
+      }
+
+      if (ctx.state !== "running") {
+        setSpeakerIndicator("blocked", "Speaker output is paused by the browser or device. Restart audio to continue.");
         return;
       }
 
@@ -206,9 +265,71 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       source.start(startTime);
       nextPlayTimeRef.current = startTime + audioBuffer.duration;
     } catch (err) {
+      setSpeakerIndicator("blocked", "Audio playback failed. Check device audio routing and restart the session.");
       console.error("Audio playback error:", err);
     }
-  }, []);
+  }, [setSpeakerIndicator]);
+
+  const teardownSessionResources = useCallback(() => {
+    clearConnectTimeout();
+    clearStreamReadyTimeout();
+    isReadyToStreamRef.current = false;
+    isBackpressuredRef.current = false;
+    droppedChunksRef.current = 0;
+    interruptPlayback();
+
+    if (processorRef.current) {
+      processorRef.current.port.onmessage = null;
+      processorRef.current.disconnect();
+    }
+
+    sourceRef.current?.disconnect();
+    audioContextRef.current?.close();
+    playbackCtxRef.current?.close();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+
+    if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) {
+      wsRef.current.close();
+    }
+
+    processorRef.current = null;
+    sourceRef.current = null;
+    audioContextRef.current = null;
+    playbackCtxRef.current = null;
+    streamRef.current = null;
+    wsRef.current = null;
+  }, [clearConnectTimeout, clearStreamReadyTimeout, interruptPlayback]);
+
+  const stopSession = useCallback((
+    intent: DisconnectIntent,
+    options?: {
+      logMessage?: string;
+      reconnectDetail?: string;
+      speakerDetail?: string;
+    },
+  ) => {
+    disconnectIntentRef.current = intent;
+    teardownSessionResources();
+    setStatus("disconnected");
+
+    if (options?.speakerDetail) {
+      setSpeakerIndicator("idle", options.speakerDetail);
+    } else if (intent !== "error") {
+      setSpeakerIndicator("idle", "Speaker output is idle until the next session starts.");
+    }
+
+    if (intent === "manual") {
+      setReconnectIndicator("idle", "Session stopped manually.");
+    } else if (intent === "lifecycle") {
+      setReconnectIndicator("available", options?.reconnectDetail ?? "Session paused when the app moved to the background.");
+    } else if (intent === "error") {
+      setReconnectIndicator("available", options?.reconnectDetail ?? "Connection dropped. Reconnect to continue.");
+    }
+
+    if (options?.logMessage) {
+      addLog(options.logMessage);
+    }
+  }, [addLog, setReconnectIndicator, setSpeakerIndicator, teardownSessionResources]);
 
   const startAudioCapture = useCallback(async (
     audioCtx: AudioContext,
@@ -294,9 +415,18 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const start = useCallback(async () => {
     if (status !== "disconnected") return;
 
+    const isReconnectAttempt = sessionIndicators.reconnect.state === "available";
+
     lifecycleStopRequestedRef.current = false;
+    disconnectIntentRef.current = "none";
     setStatus("connecting");
     setLogs([]);
+    setPermissionIndicator("requesting", "Waiting for microphone access.");
+    setSpeakerIndicator("preparing", "Preparing speaker output for the live session.");
+    setReconnectIndicator(
+      isReconnectAttempt ? "reconnecting" : "idle",
+      isReconnectAttempt ? "Trying to restore the live connection." : "Connection setup is in progress.",
+    );
     addLog("Requesting microphone access…");
 
     try {
@@ -310,6 +440,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           message = "Microphone access is blocked in this embedded preview. Open the app in a new tab or published URL.";
         }
 
+        setPermissionIndicator("unsupported", message);
+        setSpeakerIndicator("idle", "Speaker setup did not start because the session could not begin.");
         throw new Error(message);
       }
 
@@ -317,6 +449,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
         audio: getRequestedAudioConstraints(mediaDevices),
       });
       streamRef.current = stream;
+      setPermissionIndicator("granted", "Microphone access granted.");
       addLog("Microphone access granted");
 
       const audioCtx = new AudioContext();
@@ -325,6 +458,12 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       addLog(`AudioContext running at ${audioCtx.sampleRate}Hz`);
 
       await ensurePlaybackContext();
+      if (playbackCtxRef.current?.state !== "running") {
+        setSpeakerIndicator("blocked", "Speaker output is still suspended. Start again from a direct tap or disable silent mode.");
+        throw new Error("Speaker output is still blocked after setup.");
+      }
+
+      setSpeakerIndicator("ready", "Speaker output is ready for AI responses.");
       addLog("Playback context ready");
 
       const captureFrameSize = getPreferredCaptureFrameSize();
@@ -346,6 +485,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       connectTimeoutRef.current = window.setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
           addLog("Connection Timed Out", "error");
+          setReconnectIndicator("available", "Connection timed out. Try reconnecting.");
           ws.close(4000, "Connection timed out");
           setStatus("disconnected");
         }
@@ -375,6 +515,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
           if (data.type === "proxy_error") {
             addLog(`[Proxy Error] ${data.message} (code: ${data.code})`, "error");
+            setSpeakerIndicator("idle", "Speaker output is idle until the connection is restored.");
+            setReconnectIndicator("available", data.message || "Proxy connection failed. Try reconnecting.");
             return;
           }
 
@@ -420,11 +562,15 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
           if (data.type === "error") {
             addLog(`[Proxy] Error: ${data.message}`, "error");
+            setSpeakerIndicator("idle", "Speaker output is idle until the connection is restored.");
+            setReconnectIndicator("available", data.message || "The proxy reported an error. Try reconnecting.");
             return;
           }
 
           if (data.type === "gemini_closed") {
             addLog(`[Gemini] Closed: code=${data.code} reason=${data.reason || "none"}`, "error");
+            setSpeakerIndicator("idle", "Speaker output is idle until the connection is restored.");
+            setReconnectIndicator("available", "Gemini closed the live session. Reconnect to continue.");
             return;
           }
 
@@ -439,6 +585,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
             }
 
             setStatus("listening");
+            setReconnectIndicator("idle", "Live session connected.");
             isReadyToStreamRef.current = false;
             addLog("[Mic] Stabilizing hardware for 500ms…");
             clearStreamReadyTimeout();
@@ -456,17 +603,20 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
           if (data?.serverContent?.interrupted) {
             interruptPlayback();
+            setSpeakerIndicator("ready", "Speaker output is ready for the next response.");
             addLog("Playback interrupted by user speech");
             return;
           }
 
           const inlineData = data?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
           if (inlineData?.data) {
+            setSpeakerIndicator("playing", "Playing the latest AI response.");
             playAudioChunk(inlineData.data);
             addLog("Received audio response", "audio");
           }
 
           if (data?.serverContent?.turnComplete) {
+            setSpeakerIndicator("ready", "Speaker output is ready for the next response.");
             addLog("Agent turn complete");
           }
         } catch {
@@ -478,6 +628,10 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
         clearConnectTimeout();
         const targetState = event.target instanceof WebSocket ? event.target.readyState : "unknown";
         addLog(`WebSocket error (readyState: ${targetState})`, "error");
+        setSpeakerIndicator("idle", "Speaker output is idle until the connection is restored.");
+        if (disconnectIntentRef.current === "none") {
+          setReconnectIndicator("available", "The connection hit a network error. Try reconnecting.");
+        }
         setStatus("disconnected");
       };
 
@@ -488,14 +642,40 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           `WebSocket closed (code: ${event.code}, reason: ${event.reason || "none"}, clean: ${event.wasClean})`,
           event.code === 1000 ? "info" : "error",
         );
+        setSpeakerIndicator("idle", "Speaker output is idle until the connection is restored.");
+        if (disconnectIntentRef.current === "none") {
+          setReconnectIndicator(
+            "available",
+            event.reason
+              ? `Connection closed: ${event.reason}. Reconnect to continue.`
+              : "Connection closed unexpectedly. Reconnect to continue.",
+          );
+        }
         setStatus("disconnected");
       };
     } catch (err) {
-      clearConnectTimeout();
-      addLog(`Error: ${getErrorMessage(err)}`, "error");
+      const message = getErrorMessage(err);
+
+      if (err instanceof DOMException) {
+        if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+          setPermissionIndicator("denied", "Microphone access was denied. Allow it in browser settings to continue.");
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+          setPermissionIndicator("unsupported", "No microphone was found on this device.");
+        }
+      }
+
+      if (message.toLowerCase().includes("speaker")) {
+        setSpeakerIndicator("blocked", "Speaker output could not be started. Check silent mode or restart from a direct tap.");
+      }
+
+      disconnectIntentRef.current = "error";
+      teardownSessionResources();
+      setReconnectIndicator("idle", "Resolve the device issue before reconnecting.");
+      addLog(`Error: ${message}`, "error");
       setStatus("disconnected");
     }
   }, [
+    sessionIndicators.reconnect.state,
     status,
     model,
     systemInstructions,
@@ -506,36 +686,24 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
     clearConnectTimeout,
     clearStreamReadyTimeout,
     ensurePlaybackContext,
+    setPermissionIndicator,
+    setSpeakerIndicator,
+    setReconnectIndicator,
     startAudioCapture,
+    teardownSessionResources,
   ]);
 
   const stop = useCallback(() => {
-    clearConnectTimeout();
-    clearStreamReadyTimeout();
-    isReadyToStreamRef.current = false;
-    isBackpressuredRef.current = false;
-    droppedChunksRef.current = 0;
-    interruptPlayback();
-    if (processorRef.current) {
-      processorRef.current.port.onmessage = null;
-      processorRef.current.disconnect();
-    }
-    sourceRef.current?.disconnect();
-    audioContextRef.current?.close();
-    playbackCtxRef.current?.close();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    wsRef.current?.close();
+    stopSession("manual", {
+      logMessage: "Conversation ended",
+      speakerDetail: "Speaker output is idle until the next session starts.",
+    });
+  }, [stopSession]);
 
-    processorRef.current = null;
-    sourceRef.current = null;
-    audioContextRef.current = null;
-    playbackCtxRef.current = null;
-    streamRef.current = null;
-    wsRef.current = null;
-
-    setStatus("disconnected");
-    addLog("Conversation ended");
-  }, [addLog, clearConnectTimeout, clearStreamReadyTimeout, interruptPlayback]);
+  const retry = useCallback(() => {
+    if (status !== "disconnected") return;
+    void start();
+  }, [start, status]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -546,18 +714,17 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   }, [status]);
 
   useEffect(() => {
-    stopRef.current = stop;
-  }, [stop]);
-
-  useEffect(() => {
     const endSessionForLifecycle = (message: string) => {
       if (statusRef.current === "disconnected" || lifecycleStopRequestedRef.current) {
         return;
       }
 
       lifecycleStopRequestedRef.current = true;
-      addLog(message);
-      stopRef.current();
+      stopSession("lifecycle", {
+        logMessage: message,
+        reconnectDetail: "Session ended when the app moved to the background. Reconnect when you return.",
+        speakerDetail: "Speaker output is idle while the app is in the background.",
+      });
     };
 
     const handleVisibilityChange = () => {
@@ -579,10 +746,12 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
       if (statusRef.current !== "disconnected") {
         lifecycleStopRequestedRef.current = true;
-        stopRef.current();
+        stopSession("cleanup", {
+          speakerDetail: "Speaker output is idle until the next session starts.",
+        });
       }
     };
-  }, [addLog]);
+  }, [stopSession]);
 
-  return { status, logs, start, stop };
+  return { status, logs, sessionIndicators, start, stop, retry };
 }
