@@ -107,78 +107,7 @@ const TestingArea = ({
         </span>
       </div>
 
-      <section className="grid w-full max-w-2xl gap-3 sm:grid-cols-3">
-        <div className={`rounded-xl border p-4 ${permissionConfig[sessionIndicators.permission.state].className}`}>
-          <div className="mb-2 flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            <span className="text-sm font-semibold">Microphone</span>
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-            {permissionConfig[sessionIndicators.permission.state].label}
-          </p>
-          <p className="mt-2 text-sm">{sessionIndicators.permission.detail}</p>
-        </div>
-
-        <div className={`rounded-xl border p-4 ${speakerConfig[sessionIndicators.speaker.state].className}`}>
-          <div className="mb-2 flex items-center gap-2">
-            <Volume2 className="h-4 w-4" />
-            <span className="text-sm font-semibold">Speaker</span>
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-            {speakerConfig[sessionIndicators.speaker.state].label}
-          </p>
-          <p className="mt-2 text-sm">{sessionIndicators.speaker.detail}</p>
-        </div>
-
-        <div className={`rounded-xl border p-4 ${reconnectConfig[sessionIndicators.reconnect.state].className}`}>
-          <div className="mb-2 flex items-center gap-2">
-            <Wifi className="h-4 w-4" />
-            <span className="text-sm font-semibold">Reconnect</span>
-          </div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-            {reconnectConfig[sessionIndicators.reconnect.state].label}
-          </p>
-          <p className="mt-2 text-sm">{sessionIndicators.reconnect.detail}</p>
-          {sessionIndicators.reconnect.state === "available" && (
-            <Button onClick={onReconnect} variant="outline" size="sm" className="mt-3 w-full gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Reconnect
-            </Button>
-          )}
-        </div>
-      </section>
-
       <InstallPrompt />
-
-      <section className="w-full max-w-2xl rounded-xl border border-border bg-card/60 p-4 sm:p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Connection Logs</h2>
-          <span className="text-xs text-muted-foreground">
-            {logs.length ? `${logs.length} event${logs.length === 1 ? "" : "s"}` : "No events yet"}
-          </span>
-        </div>
-        {recentLogs.length > 0 ? (
-          <div className="space-y-2">
-            {recentLogs.map((log, index) => (
-              <div
-                key={`${log.timestamp.toISOString()}-${index}`}
-                className="rounded-md border border-border/60 bg-background/80 px-3 py-2 text-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className={logTypeColors[log.type] ?? "text-muted-foreground"}>{log.message}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {log.timestamp.toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Start a conversation to see microphone, WebSocket, and backend events here.
-          </p>
-        )}
-      </section>
     </main>
   );
 };
