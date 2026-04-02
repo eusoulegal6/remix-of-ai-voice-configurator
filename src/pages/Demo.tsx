@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useGeminiAudio } from "@/hooks/useGeminiAudio";
@@ -19,21 +19,14 @@ const Demo = () => {
     voiceName: config.voiceName,
   });
 
-  const autoStartedRef = useRef(false);
-
   useEffect(() => {
-    if (autoStartedRef.current) return;
-    autoStartedRef.current = true;
-
     const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const warmUpUrl = `${baseUrl}/functions/v1/gemini-ws`;
 
     if (warmUpUrl && baseUrl) {
       fetch(warmUpUrl, { method: "OPTIONS" }).catch(() => {});
     }
-
-    start();
-  }, [start]);
+  }, []);
 
   return (
     <div className="relative flex min-h-dvh w-full flex-col overflow-x-hidden animate-slide-down-fade">

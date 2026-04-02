@@ -500,55 +500,27 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
       addLog(`Connecting to proxy: ${wsUrl}`);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      let inputContext: AudioContext | null = null;
+      let stream: MediaStream | null = null;
+      let captureFrameSize = getPreferredCaptureFrameSize();
+      let setupCompleteReceived = false;
+      let audioCaptureStarted = false;
 
-      // Promise that resolves when WS is open, or rejects on error/timeout
-      const wsOpenPromise = new Promise<void>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          reject(new Error("Connection timed out"));
-          ws.close(4000, "Connection timed out");
-        }, 5000);
+      const beginStreamingIfReady = async () => {
+        if (audioCaptureStarted || !setupCompleteReceived || !inputContext || !stream) return;
 
-        ws.addEventListener("open", () => {
-          window.clearTimeout(timeout);
-          addLog("WebSocket connected, waiting for proxy...");
-          resolve();
-        }, { once: true });
-
-        ws.addEventListener("error", () => {
-          window.clearTimeout(timeout);
-          reject(new Error("WebSocket connection failed"));
-        }, { once: true });
-      });
-
-      // Run mic access, playback setup, and WebSocket open in parallel
-      const stream = await mediaDevices.getUserMedia({
-        audio: getRequestedAudioConstraints(mediaDevices),
-      });
-      streamRef.current = stream;
-      setPermissionIndicator("granted", "Microphone access granted.");
-      addLog("Microphone access granted");
-
-      const playbackContext = await ensurePlaybackContext();
-      if (playbackContext.state !== "running") {
-        setSpeakerIndicator("blocked", "Speaker output is still suspended. Start again from a direct tap or disable silent mode.");
-        throw new Error("Speaker output is still blocked after setup.");
-      }
-      setSpeakerIndicator("ready", "Speaker output is ready for AI responses.");
-      addLog("Playback context ready");
-
-      const inputContext = new AudioContext();
-      if (inputContext.state === "suspended") {
-        await inputContext.resume();
-      }
-      audioContextRef.current = inputContext;
-      addLog(`AudioContext running at ${inputContext.sampleRate}Hz`);
-
-      const captureFrameSize = getPreferredCaptureFrameSize();
-      addLog(`Capture frame size: ${captureFrameSize}`);
-
-      // Now wait for the WS to be open (likely already is by now)
-      await wsOpenPromise;
-
+        audioCaptureStarted = true;
+        await startAudioCapture(inputContext, stream, ws, captureFrameSize);
+        setStatus("listening");
+        setReconnectIndicator("idle", "Live session connected.");
+        isReadyToStreamRef.current = false;
+        addLog("[Mic] Stabilizing hardware for 500ms...");
+        clearStreamReadyTimeout();
+        streamReadyTimeoutRef.current = window.setTimeout(() => {
+          isReadyToStreamRef.current = true;
+          addLog("[Mic] Ready to stream audio");
+        }, 500);
+      };
 
       ws.onmessage = async (event) => {
         let textData: string;
@@ -626,16 +598,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
 
           if (data.setupComplete) {
             addLog("[Gemini] Setup complete received");
-            await startAudioCapture(inputContext, stream, ws, captureFrameSize);
-            setStatus("listening");
-            setReconnectIndicator("idle", "Live session connected.");
-            isReadyToStreamRef.current = false;
-            addLog("[Mic] Stabilizing hardware for 500ms...");
-            clearStreamReadyTimeout();
-            streamReadyTimeoutRef.current = window.setTimeout(() => {
-              isReadyToStreamRef.current = true;
-              addLog("[Mic] Ready to stream audio");
-            }, 500);
+            setupCompleteReceived = true;
+            await beginStreamingIfReady();
             return;
           }
 
@@ -664,6 +628,55 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           addLog(`[WS <-] ${textData.slice(0, 120)}`);
         }
       };
+
+      // Promise that resolves when WS is open, or rejects on error/timeout
+      const wsOpenPromise = new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          reject(new Error("Connection timed out"));
+          ws.close(4000, "Connection timed out");
+        }, 5000);
+
+        ws.addEventListener("open", () => {
+          window.clearTimeout(timeout);
+          addLog("WebSocket connected, waiting for proxy...");
+          resolve();
+        }, { once: true });
+
+        ws.addEventListener("error", () => {
+          window.clearTimeout(timeout);
+          reject(new Error("WebSocket connection failed"));
+        }, { once: true });
+      });
+
+      // Run mic access, playback setup, and WebSocket open in parallel
+      stream = await mediaDevices.getUserMedia({
+        audio: getRequestedAudioConstraints(mediaDevices),
+      });
+      streamRef.current = stream;
+      setPermissionIndicator("granted", "Microphone access granted.");
+      addLog("Microphone access granted");
+
+      const playbackContext = await ensurePlaybackContext();
+      if (playbackContext.state !== "running") {
+        setSpeakerIndicator("blocked", "Speaker output is still suspended. Start again from a direct tap or disable silent mode.");
+        throw new Error("Speaker output is still blocked after setup.");
+      }
+      setSpeakerIndicator("ready", "Speaker output is ready for AI responses.");
+      addLog("Playback context ready");
+
+      inputContext = new AudioContext();
+      if (inputContext.state === "suspended") {
+        await inputContext.resume();
+      }
+      audioContextRef.current = inputContext;
+      addLog(`AudioContext running at ${inputContext.sampleRate}Hz`);
+
+      captureFrameSize = getPreferredCaptureFrameSize();
+      addLog(`Capture frame size: ${captureFrameSize}`);
+
+      // Now wait for the WS to be open (likely already is by now)
+      await wsOpenPromise;
+      await beginStreamingIfReady();
 
       ws.onerror = (event) => {
         clearConnectTimeout();
