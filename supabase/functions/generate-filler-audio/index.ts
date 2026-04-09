@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: phrase_text }] }],
+        contents: [{ parts: [{ text: `Say the following exactly as spoken audio: "${phrase_text}"` }] }],
         generationConfig: {
           response_modalities: ["AUDIO"],
           speech_config: {
