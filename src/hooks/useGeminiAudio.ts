@@ -5,6 +5,7 @@ const MOBILE_CAPTURE_FRAME_SIZE = 2048;
 const DEFAULT_CAPTURE_FRAME_SIZE = 4096;
 const WS_BUFFERED_AMOUNT_HIGH_WATER_MARK = 128 * 1024;
 const WS_BUFFERED_AMOUNT_LOW_WATER_MARK = 32 * 1024;
+const SPEECH_END_DEBOUNCE_MS = 350;
 
 function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
   if (inputSampleRate === 16000) return float32Array;
@@ -427,15 +428,24 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
         }
       }
       if (isSilent) {
-        // Start a debounce timer — only fire onUserSpeechEnd after 350ms of sustained silence
+        // Start a debounce timer — only fire onUserSpeechEnd after sustained silence
         if (userIsSpeakingRef.current && speechEndTimerRef.current === null) {
+          console.debug("[FillerDebug]", {
+            atMs: performance.now(),
+            phase: "useGeminiAudio.speechEndDebounceStarted",
+            thresholdMs: SPEECH_END_DEBOUNCE_MS,
+          });
           speechEndTimerRef.current = window.setTimeout(() => {
             speechEndTimerRef.current = null;
             if (userIsSpeakingRef.current) {
               userIsSpeakingRef.current = false;
+              console.debug("[FillerDebug]", {
+                atMs: performance.now(),
+                phase: "useGeminiAudio.onUserSpeechEnd",
+              });
               onUserSpeechEndRef.current?.();
             }
-          }, 350);
+          }, SPEECH_END_DEBOUNCE_MS);
         }
         return;
       }
@@ -444,11 +454,19 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
       if (speechEndTimerRef.current !== null) {
         window.clearTimeout(speechEndTimerRef.current);
         speechEndTimerRef.current = null;
+        console.debug("[FillerDebug]", {
+          atMs: performance.now(),
+          phase: "useGeminiAudio.speechEndDebounceCancelled",
+        });
       }
 
       // Fire onUserSpeech once per speech burst (non-silent → first frame only)
       if (!userIsSpeakingRef.current) {
         userIsSpeakingRef.current = true;
+        console.debug("[FillerDebug]", {
+          atMs: performance.now(),
+          phase: "useGeminiAudio.onUserSpeech",
+        });
         onUserSpeechRef.current?.();
       }
 

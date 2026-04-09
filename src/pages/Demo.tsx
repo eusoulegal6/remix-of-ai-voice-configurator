@@ -17,11 +17,26 @@ const Demo = () => {
   });
 
   // Stable refs so useGeminiAudio's callbacks always call the latest filler functions
-  const stopFillerRef = useRef<() => void>(() => {});
+  const stopFillerRef = useRef<(reason?: string) => void>(() => {});
   const onFirstSpeechEndRef = useRef<() => void>(() => {});
 
-  const handleUserSpeech = useCallback(() => stopFillerRef.current(), []);
-  const handleUserSpeechEnd = useCallback(() => onFirstSpeechEndRef.current(), []);
+  const handleUserSpeech = useCallback(() => {
+    console.debug("[FillerDebug]", {
+      atMs: performance.now(),
+      phase: "Demo.onUserSpeechForwarded",
+      selectedVoice: config.voiceName,
+    });
+    stopFillerRef.current("user_speech");
+  }, [config.voiceName]);
+
+  const handleUserSpeechEnd = useCallback(() => {
+    console.debug("[FillerDebug]", {
+      atMs: performance.now(),
+      phase: "Demo.onUserSpeechEndForwarded",
+      selectedVoice: config.voiceName,
+    });
+    onFirstSpeechEndRef.current();
+  }, [config.voiceName]);
 
   const { status, logs, sessionIndicators, start, stop, retry } = useGeminiAudio({
     model: config.model,
@@ -36,6 +51,15 @@ const Demo = () => {
     status,
     sessionIndicators,
   });
+
+  useEffect(() => {
+    console.debug("[FillerDebug]", {
+      atMs: performance.now(),
+      phase: "Demo.fillerState",
+      selectedVoice: config.voiceName,
+      fillerEnabled,
+    });
+  }, [config.voiceName, fillerEnabled]);
 
   // Keep ref in sync
   useEffect(() => { stopFillerRef.current = stopFiller; }, [stopFiller]);
