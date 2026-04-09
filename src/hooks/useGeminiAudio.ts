@@ -448,7 +448,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
             }
           }, SPEECH_END_DEBOUNCE_MS);
         }
-        return;
+        // Do NOT return here — silent frames must still be sent to Gemini
+        // so it can detect end-of-utterance and generate a response.
       }
 
       // Non-silent frame: cancel any pending speech-end timer
