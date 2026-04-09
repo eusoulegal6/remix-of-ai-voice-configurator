@@ -151,6 +151,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
   const onUserSpeechRef = useRef(onUserSpeech);
   const onUserSpeechEndRef = useRef(onUserSpeechEnd);
   const userIsSpeakingRef = useRef(false);
+  const speechEndTimerRef = useRef<number | null>(null);
 
   // Keep the callback refs in sync without causing re-renders
   useEffect(() => { onUserSpeechRef.current = onUserSpeech; }, [onUserSpeech]);
