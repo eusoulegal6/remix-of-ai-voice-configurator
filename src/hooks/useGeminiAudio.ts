@@ -149,6 +149,9 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
   const onUserSpeechRef = useRef(onUserSpeech);
   const userIsSpeakingRef = useRef(false);
 
+  // Keep the callback ref in sync without causing re-renders
+  useEffect(() => { onUserSpeechRef.current = onUserSpeech; }, [onUserSpeech]);
+
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
   }, []);
@@ -307,6 +310,7 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
     isReadyToStreamRef.current = false;
     isBackpressuredRef.current = false;
     droppedChunksRef.current = 0;
+    userIsSpeakingRef.current = false;
     interruptPlayback();
 
     if (processorRef.current) {
