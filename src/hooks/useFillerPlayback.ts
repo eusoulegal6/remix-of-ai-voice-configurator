@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ConnectionStatus, SessionIndicators } from "@/hooks/useGeminiAudio";
+import { getVersionedAudioUrl } from "@/lib/filler-audio";
 
 const GREETING_KEYS = ["hear_you"];
 
@@ -73,7 +74,7 @@ export function useFillerPlayback({
 
     supabase
       .from("filler_audio")
-      .select("audio_url, phrase_key, phrase_text, voice_name, status")
+      .select("audio_url, phrase_key, phrase_text, voice_name, status, updated_at")
       .eq("voice_name", voiceName)
       .eq("status", "ready")
       .in("phrase_key", GREETING_KEYS)
@@ -90,7 +91,7 @@ export function useFillerPlayback({
         }
 
         const row = data?.[0];
-        const url = row?.audio_url;
+        const url = getVersionedAudioUrl(row?.audio_url, row?.updated_at);
         logFillerDebug("useFillerPlayback.preloadLookupResult", {
           selectedVoice: voiceName,
           phraseKeys: GREETING_KEYS,
