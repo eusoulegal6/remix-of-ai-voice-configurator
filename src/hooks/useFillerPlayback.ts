@@ -52,30 +52,20 @@ export function useFillerPlayback({
   // ── Preload one greeting clip for the selected voice ──────────────
   const preloadedAudioRef = useRef<HTMLAudioElement | null>(null);
   const preloadedVoiceRef = useRef<string>("");
+  const audioUnlockedRef = useRef(false);
 
-  useEffect(() => {
-    if (!voiceName) return;
-    if (preloadedVoiceRef.current === voiceName && preloadedAudioRef.current) {
-      logFillerDebug("useFillerPlayback.preloadSkippedExisting", {
-        selectedVoice: voiceName,
-        phraseKeys: GREETING_KEYS,
-        readyState: preloadedAudioRef.current.readyState,
-        networkState: preloadedAudioRef.current.networkState,
-      });
-      return;
-    }
-
-    preloadedAudioRef.current = null;
-    preloadedVoiceRef.current = voiceName;
+  // Fetch the audio URL for the current voice and assign it to the
+  // (possibly already-unlocked) Audio element.
+  const loadFillerUrl = useCallback((voice: string) => {
     logFillerDebug("useFillerPlayback.preloadLookupStarted", {
-      selectedVoice: voiceName,
+      selectedVoice: voice,
       phraseKeys: GREETING_KEYS,
     });
 
     supabase
       .from("filler_audio")
       .select("audio_url, phrase_key, phrase_text, voice_name, status, updated_at")
-      .eq("voice_name", voiceName)
+      .eq("voice_name", voice)
       .eq("status", "ready")
       .in("phrase_key", GREETING_KEYS)
       .not("audio_url", "is", null)
@@ -83,8 +73,7 @@ export function useFillerPlayback({
       .then(({ data, error }) => {
         if (error) {
           logFillerDebug("useFillerPlayback.preloadLookupError", {
-            selectedVoice: voiceName,
-            phraseKeys: GREETING_KEYS,
+            selectedVoice: voice,
             error: error.message,
           });
           return;
@@ -93,72 +82,85 @@ export function useFillerPlayback({
         const row = data?.[0];
         const url = getVersionedAudioUrl(row?.audio_url, row?.updated_at);
         logFillerDebug("useFillerPlayback.preloadLookupResult", {
-          selectedVoice: voiceName,
-          phraseKeys: GREETING_KEYS,
+          selectedVoice: voice,
           rowCount: data?.length ?? 0,
           phraseKey: row?.phrase_key ?? null,
-          phraseText: row?.phrase_text ?? null,
-          voiceName: row?.voice_name ?? null,
-          status: row?.status ?? null,
           audioUrl: url ?? null,
         });
 
-        if (!url) return;
+        if (!url || preloadedVoiceRef.current !== voice) return;
 
-        const audio = new Audio(url);
-        audio.preload = "auto";
-        audio.volume = 0.85;
-        audio.muted = false;
-        audio.addEventListener("loadedmetadata", () => {
-          logFillerDebug("useFillerPlayback.preloadLoadedMetadata", {
-            selectedVoice: voiceName,
-            phraseKey: row?.phrase_key ?? null,
-            duration: audio.duration,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
+        // If we already have an unlocked element, just swap src
+        const existing = preloadedAudioRef.current;
+        if (existing) {
+          existing.src = url;
+          existing.load();
+          logFillerDebug("useFillerPlayback.preloadSrcUpdated", {
+            selectedVoice: voice,
+            audioUrl: url,
           });
-        });
-        audio.addEventListener("loadeddata", () => {
-          logFillerDebug("useFillerPlayback.preloadLoadedData", {
-            selectedVoice: voiceName,
-            phraseKey: row?.phrase_key ?? null,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
-          });
-        });
-        audio.addEventListener("canplaythrough", () => {
-          logFillerDebug("useFillerPlayback.preloadCanPlayThrough", {
-            selectedVoice: voiceName,
-            phraseKey: row?.phrase_key ?? null,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
-          });
-        });
-        audio.addEventListener("error", () => {
-          logFillerDebug("useFillerPlayback.preloadAudioError", {
-            selectedVoice: voiceName,
-            phraseKey: row?.phrase_key ?? null,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
-            currentSrc: audio.currentSrc || audio.src,
-          });
-        });
-
-        logFillerDebug("useFillerPlayback.preloadAudioCreated", {
-          selectedVoice: voiceName,
-          phraseKey: row?.phrase_key ?? null,
-          audioUrl: url,
-          readyState: audio.readyState,
-          networkState: audio.networkState,
-          volume: audio.volume,
-          muted: audio.muted,
-        });
-
-        if (preloadedVoiceRef.current === voiceName) {
+        } else {
+          // Fallback: create new element (desktop path where unlock isn't needed)
+          const audio = new Audio(url);
+          audio.preload = "auto";
+          audio.volume = 0.85;
           preloadedAudioRef.current = audio;
+          logFillerDebug("useFillerPlayback.preloadAudioCreated", {
+            selectedVoice: voice,
+            audioUrl: url,
+          });
         }
       });
-  }, [voiceName]);
+  }, []);
+
+  useEffect(() => {
+    if (!voiceName) return;
+    preloadedVoiceRef.current = voiceName;
+    // Don't clear the audio element on voice change if it's unlocked;
+    // loadFillerUrl will swap the src instead.
+    if (!audioUnlockedRef.current) {
+      preloadedAudioRef.current = null;
+    }
+    loadFillerUrl(voiceName);
+  }, [voiceName, loadFillerUrl]);
+
+  // ── Warm-up / unlock: call this from a user gesture (Start tap) ──
+  const warmUpAudio = useCallback(() => {
+    if (audioUnlockedRef.current && preloadedAudioRef.current) {
+      logFillerDebug("useFillerPlayback.warmUpSkipped", { alreadyUnlocked: true });
+      return;
+    }
+
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.volume = 0.85;
+
+    // Play a tiny silent buffer to unlock the element on iOS/Android
+    // This must happen synchronously in a user gesture handler
+    audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+    const p = audio.play();
+    if (p) {
+      p.then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        logFillerDebug("useFillerPlayback.warmUpUnlocked");
+      }).catch((err) => {
+        logFillerDebug("useFillerPlayback.warmUpFailed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
+    preloadedAudioRef.current = audio;
+    audioUnlockedRef.current = true;
+
+    // Now load the real URL onto this unlocked element
+    if (preloadedVoiceRef.current) {
+      loadFillerUrl(preloadedVoiceRef.current);
+    }
+
+    logFillerDebug("useFillerPlayback.warmUpCreated");
+  }, [loadFillerUrl]);
 
   // ── Stop greeting playback ────────────────────────────────────────
   const stopFiller = useCallback((reason = "unknown") => {
@@ -328,6 +330,7 @@ export function useFillerPlayback({
       playedRef.current = false;
       firstSpeechEndedRef.current = false;
       playStartedRef.current = false;
+      audioUnlockedRef.current = false;
       logFillerDebug("useFillerPlayback.sessionReset", {
         trigger: status,
         played: playedRef.current,
@@ -346,5 +349,5 @@ export function useFillerPlayback({
     return () => stopFiller("unmount_cleanup");
   }, [stopFiller]);
 
-  return { fillerEnabled: enabled, setFillerEnabled: setEnabled, stopFiller, onFirstSpeechEnd };
+  return { fillerEnabled: enabled, setFillerEnabled: setEnabled, stopFiller, onFirstSpeechEnd, warmUpAudio };
 }

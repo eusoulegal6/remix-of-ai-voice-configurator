@@ -46,7 +46,7 @@ const Demo = () => {
     onUserSpeechEnd: handleUserSpeechEnd,
   });
 
-  const { fillerEnabled, setFillerEnabled, stopFiller, onFirstSpeechEnd } = useFillerPlayback({
+  const { fillerEnabled, setFillerEnabled, stopFiller, onFirstSpeechEnd, warmUpAudio } = useFillerPlayback({
     voiceName: config.voiceName,
     status,
     sessionIndicators,
@@ -98,7 +98,10 @@ const Demo = () => {
         status={status}
         logs={logs}
         sessionIndicators={sessionIndicators}
-        onStart={start}
+        onStart={() => {
+          warmUpAudio();
+          start();
+        }}
         onStop={stop}
         onReconnect={retry}
       />
