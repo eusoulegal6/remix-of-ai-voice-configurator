@@ -104,6 +104,8 @@ interface UseGeminiAudioOptions {
   model: string;
   systemInstructions: string;
   voiceName: string;
+  /** Optional callback fired once when the user starts speaking (non-silent mic frames detected). */
+  onUserSpeech?: () => void;
 }
 
 type DisconnectIntent = "none" | "manual" | "lifecycle" | "cleanup" | "error";
@@ -123,7 +125,7 @@ const INITIAL_SESSION_INDICATORS: SessionIndicators = {
   },
 };
 
-export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGeminiAudioOptions) {
+export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpeech }: UseGeminiAudioOptions) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [sessionIndicators, setSessionIndicators] = useState<SessionIndicators>(INITIAL_SESSION_INDICATORS);
@@ -144,6 +146,8 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
   const disconnectIntentRef = useRef<DisconnectIntent>("none");
   const isBackpressuredRef = useRef(false);
   const droppedChunksRef = useRef(0);
+  const onUserSpeechRef = useRef(onUserSpeech);
+  const userIsSpeakingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -409,7 +413,16 @@ export function useGeminiAudio({ model, systemInstructions, voiceName }: UseGemi
           break;
         }
       }
-      if (isSilent) return;
+      if (isSilent) {
+        userIsSpeakingRef.current = false;
+        return;
+      }
+
+      // Fire onUserSpeech once per speech burst (non-silent → first frame only)
+      if (!userIsSpeakingRef.current) {
+        userIsSpeakingRef.current = true;
+        onUserSpeechRef.current?.();
+      }
 
       const resampled = resampleTo16kHz(rawFloat32, audioContext.sampleRate);
       const base64Data = arrayBufferToBase64(floatTo16BitPCM(resampled));
