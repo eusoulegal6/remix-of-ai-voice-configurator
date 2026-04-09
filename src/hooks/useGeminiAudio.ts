@@ -6,6 +6,7 @@ const DEFAULT_CAPTURE_FRAME_SIZE = 4096;
 const WS_BUFFERED_AMOUNT_HIGH_WATER_MARK = 128 * 1024;
 const WS_BUFFERED_AMOUNT_LOW_WATER_MARK = 32 * 1024;
 const SPEECH_END_DEBOUNCE_MS = 350;
+const SILENCE_RMS_THRESHOLD = 0.01; // Below this RMS energy = silence
 
 function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
   if (inputSampleRate === 16000) return float32Array;
@@ -420,13 +421,13 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
 
       if (!rawFloat32) return;
 
-      let isSilent = true;
+      // Compute RMS energy to distinguish real speech from background noise
+      let sumSq = 0;
       for (let i = 0; i < rawFloat32.length; i++) {
-        if (rawFloat32[i] !== 0) {
-          isSilent = false;
-          break;
-        }
+        sumSq += rawFloat32[i] * rawFloat32[i];
       }
+      const rms = Math.sqrt(sumSq / rawFloat32.length);
+      const isSilent = rms < SILENCE_RMS_THRESHOLD;
       if (isSilent) {
         // Start a debounce timer — only fire onUserSpeechEnd after sustained silence
         if (userIsSpeakingRef.current && speechEndTimerRef.current === null) {
