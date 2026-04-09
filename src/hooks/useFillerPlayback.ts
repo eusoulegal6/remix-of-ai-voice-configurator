@@ -330,6 +330,7 @@ export function useFillerPlayback({
       playedRef.current = false;
       firstSpeechEndedRef.current = false;
       playStartedRef.current = false;
+      audioUnlockedRef.current = false;
       logFillerDebug("useFillerPlayback.sessionReset", {
         trigger: status,
         played: playedRef.current,
