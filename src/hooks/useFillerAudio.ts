@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getVersionedAudioUrl } from "@/lib/filler-audio";
 
 export interface FillerPhrase {
   id: string;
@@ -130,7 +131,12 @@ export function useFillerAudio(voiceName: string) {
         setPhrases((prev) =>
           prev.map((p) =>
             p.phrase_key === phraseKey
-              ? { ...p, status: "ready", audio_url: result.audio_url }
+              ? {
+                  ...p,
+                  status: "ready",
+                  audio_url: getVersionedAudioUrl(result.audio_url, new Date().toISOString()),
+                  updated_at: new Date().toISOString(),
+                }
               : p
           )
         );
