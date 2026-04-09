@@ -6,6 +6,7 @@ const DEFAULT_CAPTURE_FRAME_SIZE = 4096;
 const WS_BUFFERED_AMOUNT_HIGH_WATER_MARK = 128 * 1024;
 const WS_BUFFERED_AMOUNT_LOW_WATER_MARK = 32 * 1024;
 const SPEECH_END_DEBOUNCE_MS = 350;
+const SILENCE_RMS_THRESHOLD = 0.01; // Below this RMS energy = silence
 
 function resampleTo16kHz(float32Array: Float32Array, inputSampleRate: number): Float32Array {
   if (inputSampleRate === 16000) return float32Array;
