@@ -448,28 +448,26 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
             }
           }, SPEECH_END_DEBOUNCE_MS);
         }
-        // Do NOT return here — silent frames must still be sent to Gemini
-        // so it can detect end-of-utterance and generate a response.
-      }
+      } else {
+        // Non-silent frame: cancel any pending speech-end timer
+        if (speechEndTimerRef.current !== null) {
+          window.clearTimeout(speechEndTimerRef.current);
+          speechEndTimerRef.current = null;
+          console.debug("[FillerDebug]", {
+            atMs: performance.now(),
+            phase: "useGeminiAudio.speechEndDebounceCancelled",
+          });
+        }
 
-      // Non-silent frame: cancel any pending speech-end timer
-      if (speechEndTimerRef.current !== null) {
-        window.clearTimeout(speechEndTimerRef.current);
-        speechEndTimerRef.current = null;
-        console.debug("[FillerDebug]", {
-          atMs: performance.now(),
-          phase: "useGeminiAudio.speechEndDebounceCancelled",
-        });
-      }
-
-      // Fire onUserSpeech once per speech burst (non-silent → first frame only)
-      if (!userIsSpeakingRef.current) {
-        userIsSpeakingRef.current = true;
-        console.debug("[FillerDebug]", {
-          atMs: performance.now(),
-          phase: "useGeminiAudio.onUserSpeech",
-        });
-        onUserSpeechRef.current?.();
+        // Fire onUserSpeech once per speech burst (non-silent → first frame only)
+        if (!userIsSpeakingRef.current) {
+          userIsSpeakingRef.current = true;
+          console.debug("[FillerDebug]", {
+            atMs: performance.now(),
+            phase: "useGeminiAudio.onUserSpeech",
+          });
+          onUserSpeechRef.current?.();
+        }
       }
 
       const resampled = resampleTo16kHz(rawFloat32, audioContext.sampleRate);
