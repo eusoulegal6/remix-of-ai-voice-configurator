@@ -2,26 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { ConnectionStatus, SessionIndicators } from "@/hooks/useGeminiAudio";
 
-interface FillerClip {
-  phrase_key: string;
-  phrase_text: string;
-  audio_url: string;
-}
-
 const GREETING_KEYS = ["hello", "hi_there"];
-const FILLER_DELAY_MS = 2000;
-const FIRST_TURN_DELAY_MS = 1500;
 
 /**
- * Plays pre-generated filler audio clips during conversation gaps.
+ * Plays a single pre-generated greeting clip on the FIRST turn only.
  *
- * Strategy: observe sessionIndicators.speaker.state from OUTSIDE useGeminiAudio.
- * - speaker "ready" + status "listening" → start delay timer
- * - speaker "playing" → stop filler instantly (real AI audio arrived)
- * - status "disconnected" → stop filler, reset turn counter
- *
- * Playback uses a plain HTMLAudioElement — completely isolated from
- * the core PCM pipeline in useGeminiAudio.
+ * - Preloads the greeting audio when the voice is known.
+ * - Plays immediately when the session starts (speaker becomes "ready" for the first time).
+ * - Stops instantly on: user speech, real AI audio, disconnect, or toggle off.
+ * - Does nothing on later turns.
  */
 export function useFillerPlayback({
   voiceName,
@@ -33,38 +22,50 @@ export function useFillerPlayback({
   sessionIndicators: SessionIndicators;
 }) {
   const [enabled, setEnabled] = useState(true);
-  const clipsRef = useRef<FillerClip[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const turnCountRef = useRef(0);
-  const lastSpeakerStateRef = useRef(sessionIndicators.speaker.state);
+  const playedRef = useRef(false);
   const enabledRef = useRef(enabled);
 
-  // Keep enabledRef in sync so callbacks see the latest value
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
 
-  // ── Fetch ready clips for the selected voice ──────────────────────
+  // ── Preload one greeting clip for the selected voice ──────────────
+  const preloadedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadedVoiceRef = useRef<string>("");
+
   useEffect(() => {
     if (!voiceName) return;
+    // Don't re-fetch if already preloaded for this voice
+    if (preloadedVoiceRef.current === voiceName && preloadedAudioRef.current) return;
+
+    preloadedAudioRef.current = null;
+    preloadedVoiceRef.current = voiceName;
+
     supabase
       .from("filler_audio")
-      .select("phrase_key, phrase_text, audio_url")
+      .select("audio_url")
       .eq("voice_name", voiceName)
       .eq("status", "ready")
+      .in("phrase_key", GREETING_KEYS)
       .not("audio_url", "is", null)
+      .limit(1)
       .then(({ data }) => {
-        clipsRef.current = (data ?? []) as FillerClip[];
+        const url = data?.[0]?.audio_url;
+        if (!url) return;
+        // Preload into an Audio element so playback is instant
+        const audio = new Audio(url);
+        audio.preload = "auto";
+        audio.volume = 0.85;
+        // Only store if voice hasn't changed since fetch started
+        if (preloadedVoiceRef.current === voiceName) {
+          preloadedAudioRef.current = audio;
+        }
       });
   }, [voiceName]);
 
-  // ── Stop any playing filler and clear pending timer ───────────────
+  // ── Stop greeting playback ────────────────────────────────────────
   const stopFiller = useCallback(() => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -72,91 +73,60 @@ export function useFillerPlayback({
     }
   }, []);
 
-  // ── Pick and play one filler clip ─────────────────────────────────
-  const playFiller = useCallback(() => {
-    if (!enabledRef.current || clipsRef.current.length === 0) return;
+  // ── Play the preloaded greeting ───────────────────────────────────
+  const playGreeting = useCallback(() => {
+    if (!enabledRef.current || playedRef.current) return;
+    const audio = preloadedAudioRef.current;
+    if (!audio) return;
 
-    const isFirstTurn = turnCountRef.current === 0;
-    let candidates: FillerClip[];
-
-    if (isFirstTurn) {
-      candidates = clipsRef.current.filter((c) =>
-        GREETING_KEYS.includes(c.phrase_key),
-      );
-      if (candidates.length === 0) candidates = clipsRef.current;
-    } else {
-      candidates = clipsRef.current.filter(
-        (c) => !GREETING_KEYS.includes(c.phrase_key),
-      );
-      if (candidates.length === 0) candidates = clipsRef.current;
-    }
-
-    const clip = candidates[Math.floor(Math.random() * candidates.length)];
-    if (!clip?.audio_url) return;
-
-    const audio = new Audio(clip.audio_url);
-    audio.volume = 0.85;
+    playedRef.current = true;
+    audio.currentTime = 0;
     audio.onended = () => {
       audioRef.current = null;
     };
     audio.onerror = () => {
       audioRef.current = null;
     };
-    audio.play().catch(() => {
-      /* browser may block autoplay — fail silently */
-    });
+    audio.play().catch(() => {});
     audioRef.current = audio;
   }, []);
 
-  // ── React to speaker state changes ────────────────────────────────
+  // ── React to speaker state — first turn only ─────────────────────
+  const hasTriggeredRef = useRef(false);
+
   useEffect(() => {
+    if (!enabled || hasTriggeredRef.current) return;
+
     const speakerState = sessionIndicators.speaker.state;
-    const prevState = lastSpeakerStateRef.current;
-    lastSpeakerStateRef.current = speakerState;
 
-    if (!enabled) {
-      stopFiller();
-      return;
-    }
-
-    // STOP: real AI audio started playing
+    // Stop instantly when real AI audio arrives
     if (speakerState === "playing") {
       stopFiller();
-      turnCountRef.current += 1;
+      hasTriggeredRef.current = true; // first turn is over
       return;
     }
 
-    // START TIMER: speaker just became "ready" while session is active
-    if (
-      speakerState === "ready" &&
-      status === "listening" &&
-      prevState !== "ready"
-    ) {
-      stopFiller(); // clear any prior timer
-      const delay =
-        turnCountRef.current === 0 ? FIRST_TURN_DELAY_MS : FILLER_DELAY_MS;
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null;
-        // Re-check conditions at fire time
-        if (
-          lastSpeakerStateRef.current === "ready" &&
-          enabledRef.current
-        ) {
-          playFiller();
-        }
-      }, delay);
+    // Play greeting when speaker is ready and session is listening (first turn)
+    if (speakerState === "ready" && status === "listening") {
+      playGreeting();
     }
-  }, [sessionIndicators.speaker.state, status, enabled, stopFiller, playFiller]);
+  }, [sessionIndicators.speaker.state, status, enabled, stopFiller, playGreeting]);
 
-  // ── Stop everything on disconnect and reset turn counter ──────────
+  // ── Stop on disconnect and reset for next session ─────────────────
   useEffect(() => {
     if (status === "disconnected") {
       stopFiller();
-      turnCountRef.current = 0;
+      playedRef.current = false;
+      hasTriggeredRef.current = false;
     }
   }, [status, stopFiller]);
 
-  // ── Cleanup on unmount ────────────────────────────────────────────
+  // ── Stop if user disables ────────────────────────────────────────
+  useEffect(() => {
+    if (!enabled) stopFiller();
+  }, [enabled, stopFiller]);
+
+  // ── Cleanup on unmount ───────────────────────────────────────────
   useEffect(() => {
     return () => stopFiller();
   }, [stopFiller]);
