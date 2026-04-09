@@ -98,7 +98,10 @@ const Demo = () => {
         status={status}
         logs={logs}
         sessionIndicators={sessionIndicators}
-        onStart={start}
+        onStart={() => {
+          warmUpAudio();
+          start();
+        }}
         onStop={stop}
         onReconnect={retry}
       />
