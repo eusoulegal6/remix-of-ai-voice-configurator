@@ -16,16 +16,17 @@ const Demo = () => {
     voiceName: "Kore",
   });
 
+  const { fillerEnabled, setFillerEnabled, stopFiller } = useFillerPlayback({
+    voiceName: config.voiceName,
+    status,
+    sessionIndicators,
+  });
+
   const { status, logs, sessionIndicators, start, stop, retry } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
     voiceName: config.voiceName,
-  });
-
-  const { fillerEnabled, setFillerEnabled } = useFillerPlayback({
-    voiceName: config.voiceName,
-    status,
-    sessionIndicators,
+    onUserSpeech: stopFiller,
   });
 
   useEffect(() => {
