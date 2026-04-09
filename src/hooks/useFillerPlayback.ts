@@ -320,12 +320,15 @@ export function useFillerPlayback({
   }, [sessionIndicators.speaker.detail, sessionIndicators.speaker.state, stopFiller]);
 
   // ── Stop on disconnect and reset for next session ─────────────────
+  // Reset for each new session (both on connect and disconnect)
   useEffect(() => {
-    if (status === "disconnected") {
-      stopFiller("session_disconnected");
+    if (status === "disconnected" || status === "connecting") {
+      stopFiller(status === "disconnected" ? "session_disconnected" : "session_starting");
       playedRef.current = false;
       firstSpeechEndedRef.current = false;
+      playStartedRef.current = false;
       logFillerDebug("useFillerPlayback.sessionReset", {
+        trigger: status,
         played: playedRef.current,
         firstSpeechEnded: firstSpeechEndedRef.current,
       });
