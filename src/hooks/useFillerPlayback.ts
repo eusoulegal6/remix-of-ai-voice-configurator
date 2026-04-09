@@ -52,10 +52,125 @@ export function useFillerPlayback({
   // ── Preload one greeting clip for the selected voice ──────────────
   const preloadedAudioRef = useRef<HTMLAudioElement | null>(null);
   const preloadedVoiceRef = useRef<string>("");
+  const preloadedAudioUrlRef = useRef<string | null>(null);
   const audioUnlockedRef = useRef(false);
+  const pendingPlayRef = useRef(false);
+  const firstSpeechEndedRef = useRef(false);
+  const SILENT_WARMUP_AUDIO_URL = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
 
-  // Fetch the audio URL for the current voice and assign it to the
-  // (possibly already-unlocked) Audio element.
+  const playConfiguredGreeting = useCallback(() => {
+    if (!enabledRef.current || playedRef.current) return;
+
+    const audio = preloadedAudioRef.current;
+    const audioUrl = preloadedAudioUrlRef.current;
+
+    if (!audio || !audioUrl) {
+      pendingPlayRef.current = true;
+      logFillerDebug("useFillerPlayback.audioPendingUntilReady", {
+        hasAudio: Boolean(audio),
+        hasAudioUrl: Boolean(audioUrl),
+        firstSpeechEnded: firstSpeechEndedRef.current,
+      });
+      return;
+    }
+
+    pendingPlayRef.current = false;
+    playStartedRef.current = false;
+
+    if ((audio.currentSrc || audio.src) !== audioUrl) {
+      audio.src = audioUrl;
+      audio.load();
+    }
+
+    audio.muted = false;
+    audio.currentTime = 0;
+    audio.onplaying = () => {
+      playedRef.current = true;
+      playStartedRef.current = true;
+      logFillerDebug("useFillerPlayback.audioPlaying", {
+        currentTime: audio.currentTime,
+        paused: audio.paused,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        volume: audio.volume,
+        muted: audio.muted,
+      });
+    };
+    audio.onended = () => {
+      logFillerDebug("useFillerPlayback.audioEnded", {
+        currentTime: audio.currentTime,
+      });
+      audioRef.current = null;
+      playStartedRef.current = false;
+      pendingPlayRef.current = false;
+    };
+    audio.onerror = () => {
+      logFillerDebug("useFillerPlayback.audioError", {
+        currentTime: audio.currentTime,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        currentSrc: audio.currentSrc || audio.src,
+      });
+      audioRef.current = null;
+      playStartedRef.current = false;
+      playedRef.current = false;
+    };
+
+    logFillerDebug("useFillerPlayback.audioPlayCalled", {
+      currentTime: audio.currentTime,
+      paused: audio.paused,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      volume: audio.volume,
+      muted: audio.muted,
+      currentSrc: audio.currentSrc || audio.src,
+    });
+
+    const playPromise = audio.play();
+    if (playPromise) {
+      playPromise
+        .then(() => {
+          playedRef.current = true;
+          logFillerDebug("useFillerPlayback.audioPlayResolved", {
+            currentTime: audio.currentTime,
+            paused: audio.paused,
+            readyState: audio.readyState,
+            networkState: audio.networkState,
+            volume: audio.volume,
+            muted: audio.muted,
+          });
+
+          window.setTimeout(() => {
+            logFillerDebug("useFillerPlayback.audioPostPlayCheck", {
+              currentTime: audio.currentTime,
+              paused: audio.paused,
+              ended: audio.ended,
+              readyState: audio.readyState,
+              networkState: audio.networkState,
+              volume: audio.volume,
+              muted: audio.muted,
+            });
+          }, 150);
+        })
+        .catch((error: unknown) => {
+          playedRef.current = false;
+          pendingPlayRef.current = firstSpeechEndedRef.current;
+          logFillerDebug("useFillerPlayback.audioPlayRejected", {
+            error: error instanceof Error ? error.message : String(error),
+            errorName: error instanceof Error ? error.name : null,
+            currentTime: audio.currentTime,
+            paused: audio.paused,
+            readyState: audio.readyState,
+            networkState: audio.networkState,
+            volume: audio.volume,
+            muted: audio.muted,
+          });
+        });
+    }
+
+    audioRef.current = audio;
+  }, []);
+
   const loadFillerUrl = useCallback((voice: string) => {
     logFillerDebug("useFillerPlayback.preloadLookupStarted", {
       selectedVoice: voice,
@@ -90,34 +205,43 @@ export function useFillerPlayback({
 
         if (!url || preloadedVoiceRef.current !== voice) return;
 
-        // If we already have an unlocked element, just swap src
+        preloadedAudioUrlRef.current = url;
+
         const existing = preloadedAudioRef.current;
         if (existing) {
-          existing.src = url;
-          existing.load();
+          if ((existing.currentSrc || existing.src) !== url) {
+            existing.src = url;
+            existing.load();
+          }
           logFillerDebug("useFillerPlayback.preloadSrcUpdated", {
             selectedVoice: voice,
             audioUrl: url,
           });
         } else {
-          // Fallback: create new element (desktop path where unlock isn't needed)
           const audio = new Audio(url);
           audio.preload = "auto";
           audio.volume = 0.85;
+          audio.muted = false;
           preloadedAudioRef.current = audio;
           logFillerDebug("useFillerPlayback.preloadAudioCreated", {
             selectedVoice: voice,
             audioUrl: url,
           });
         }
+
+        if (pendingPlayRef.current && firstSpeechEndedRef.current && enabledRef.current && !playedRef.current) {
+          logFillerDebug("useFillerPlayback.playPendingGreetingNow", {
+            selectedVoice: voice,
+          });
+          playConfiguredGreeting();
+        }
       });
-  }, []);
+  }, [playConfiguredGreeting]);
 
   useEffect(() => {
     if (!voiceName) return;
     preloadedVoiceRef.current = voiceName;
-    // Don't clear the audio element on voice change if it's unlocked;
-    // loadFillerUrl will swap the src instead.
+    preloadedAudioUrlRef.current = null;
     if (!audioUnlockedRef.current) {
       preloadedAudioRef.current = null;
     }
@@ -134,32 +258,41 @@ export function useFillerPlayback({
     const audio = new Audio();
     audio.preload = "auto";
     audio.volume = 0.85;
-
-    // Play a tiny silent buffer to unlock the element on iOS/Android
-    // This must happen synchronously in a user gesture handler
-    audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
-    const p = audio.play();
-    if (p) {
-      p.then(() => {
-        audio.pause();
-        audio.currentTime = 0;
-        logFillerDebug("useFillerPlayback.warmUpUnlocked");
-      }).catch((err) => {
-        logFillerDebug("useFillerPlayback.warmUpFailed", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
+    audio.muted = true;
+    audio.src = preloadedAudioUrlRef.current ?? SILENT_WARMUP_AUDIO_URL;
+    audio.load();
 
     preloadedAudioRef.current = audio;
     audioUnlockedRef.current = true;
 
-    // Now load the real URL onto this unlocked element
-    if (preloadedVoiceRef.current) {
-      loadFillerUrl(preloadedVoiceRef.current);
+    const playPromise = audio.play();
+    if (playPromise) {
+      playPromise
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.muted = false;
+
+          if (!preloadedAudioUrlRef.current && preloadedVoiceRef.current) {
+            loadFillerUrl(preloadedVoiceRef.current);
+          }
+
+          logFillerDebug("useFillerPlayback.warmUpUnlocked", {
+            currentSrc: audio.currentSrc || audio.src,
+            hadRealAudioUrl: Boolean(preloadedAudioUrlRef.current),
+          });
+        })
+        .catch((err) => {
+          audio.muted = false;
+          logFillerDebug("useFillerPlayback.warmUpFailed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
     }
 
-    logFillerDebug("useFillerPlayback.warmUpCreated");
+    logFillerDebug("useFillerPlayback.warmUpCreated", {
+      hadRealAudioUrl: Boolean(preloadedAudioUrlRef.current),
+    });
   }, [loadFillerUrl]);
 
   // ── Stop greeting playback ────────────────────────────────────────
@@ -185,132 +318,23 @@ export function useFillerPlayback({
       audioRef.current = null;
     }
 
+    pendingPlayRef.current = false;
     playStartedRef.current = false;
-  }, []);
-
-  // ── Play the preloaded greeting ───────────────────────────────────
-  const playGreeting = useCallback(() => {
-    logFillerDebug("useFillerPlayback.playGreetingAttempt", {
-      fillerEnabled: enabledRef.current,
-      firstTurnFlagFalse: !playedRef.current,
-      played: playedRef.current,
-      selectedVoice: preloadedVoiceRef.current,
-      hasPreloadedAudio: Boolean(preloadedAudioRef.current),
-    });
-
-    if (!enabledRef.current || playedRef.current) return;
-    const audio = preloadedAudioRef.current;
-    if (!audio) return;
-
-    playStartedRef.current = false;
-    playedRef.current = true;
-    logFillerDebug("useFillerPlayback.playedRefSet", {
-      played: playedRef.current,
-      selectedVoice: preloadedVoiceRef.current,
-      readyState: audio.readyState,
-      networkState: audio.networkState,
-      volume: audio.volume,
-      muted: audio.muted,
-      paused: audio.paused,
-      currentSrc: audio.currentSrc || audio.src,
-    });
-
-    audio.currentTime = 0;
-    audio.onplaying = () => {
-      playStartedRef.current = true;
-      logFillerDebug("useFillerPlayback.audioPlaying", {
-        currentTime: audio.currentTime,
-        paused: audio.paused,
-        readyState: audio.readyState,
-        networkState: audio.networkState,
-        volume: audio.volume,
-        muted: audio.muted,
-      });
-    };
-    audio.onended = () => {
-      logFillerDebug("useFillerPlayback.audioEnded", {
-        currentTime: audio.currentTime,
-      });
-      audioRef.current = null;
-      playStartedRef.current = false;
-    };
-    audio.onerror = () => {
-      logFillerDebug("useFillerPlayback.audioError", {
-        currentTime: audio.currentTime,
-        readyState: audio.readyState,
-        networkState: audio.networkState,
-        currentSrc: audio.currentSrc || audio.src,
-      });
-      audioRef.current = null;
-      playStartedRef.current = false;
-    };
-
-    logFillerDebug("useFillerPlayback.audioPlayCalled", {
-      currentTime: audio.currentTime,
-      paused: audio.paused,
-      readyState: audio.readyState,
-      networkState: audio.networkState,
-      volume: audio.volume,
-      muted: audio.muted,
-      currentSrc: audio.currentSrc || audio.src,
-    });
-
-    const playPromise = audio.play();
-    if (playPromise) {
-      playPromise
-        .then(() => {
-          logFillerDebug("useFillerPlayback.audioPlayResolved", {
-            currentTime: audio.currentTime,
-            paused: audio.paused,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
-            volume: audio.volume,
-            muted: audio.muted,
-          });
-
-          window.setTimeout(() => {
-            logFillerDebug("useFillerPlayback.audioPostPlayCheck", {
-              currentTime: audio.currentTime,
-              paused: audio.paused,
-              ended: audio.ended,
-              readyState: audio.readyState,
-              networkState: audio.networkState,
-              volume: audio.volume,
-              muted: audio.muted,
-            });
-          }, 150);
-        })
-        .catch((error: unknown) => {
-          logFillerDebug("useFillerPlayback.audioPlayRejected", {
-            error: error instanceof Error ? error.message : String(error),
-            errorName: error instanceof Error ? error.name : null,
-            currentTime: audio.currentTime,
-            paused: audio.paused,
-            readyState: audio.readyState,
-            networkState: audio.networkState,
-            volume: audio.volume,
-            muted: audio.muted,
-          });
-        });
-    }
-
-    audioRef.current = audio;
   }, []);
 
   // ── Called by Demo when the user's first speech burst ends ────────
-  const firstSpeechEndedRef = useRef(false);
-
   const onFirstSpeechEnd = useCallback(() => {
     logFillerDebug("useFillerPlayback.onFirstSpeechEnd", {
       fillerEnabled: enabledRef.current,
       firstSpeechEnded: firstSpeechEndedRef.current,
       played: playedRef.current,
+      hasAudioUrl: Boolean(preloadedAudioUrlRef.current),
     });
 
     if (firstSpeechEndedRef.current || playedRef.current) return;
     firstSpeechEndedRef.current = true;
-    playGreeting();
-  }, [playGreeting]);
+    playConfiguredGreeting();
+  }, [playConfiguredGreeting]);
 
   // ── Stop instantly when real AI audio starts ─────────────────────
   useEffect(() => {
