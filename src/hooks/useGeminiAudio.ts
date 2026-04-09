@@ -106,6 +106,8 @@ interface UseGeminiAudioOptions {
   voiceName: string;
   /** Optional callback fired once when the user starts speaking (non-silent mic frames detected). */
   onUserSpeech?: () => void;
+  /** Optional callback fired when a speech burst ends (transition from non-silent to silent frames). */
+  onUserSpeechEnd?: () => void;
 }
 
 type DisconnectIntent = "none" | "manual" | "lifecycle" | "cleanup" | "error";
