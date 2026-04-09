@@ -16,18 +16,22 @@ const Demo = () => {
     voiceName: "Kore",
   });
 
-  // Stable ref so useGeminiAudio's callback always calls the latest stopFiller
+  // Stable refs so useGeminiAudio's callbacks always call the latest filler functions
   const stopFillerRef = useRef<() => void>(() => {});
+  const onFirstSpeechEndRef = useRef<() => void>(() => {});
+
   const handleUserSpeech = useCallback(() => stopFillerRef.current(), []);
+  const handleUserSpeechEnd = useCallback(() => onFirstSpeechEndRef.current(), []);
 
   const { status, logs, sessionIndicators, start, stop, retry } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
     voiceName: config.voiceName,
     onUserSpeech: handleUserSpeech,
+    onUserSpeechEnd: handleUserSpeechEnd,
   });
 
-  const { fillerEnabled, setFillerEnabled, stopFiller } = useFillerPlayback({
+  const { fillerEnabled, setFillerEnabled, stopFiller, onFirstSpeechEnd } = useFillerPlayback({
     voiceName: config.voiceName,
     status,
     sessionIndicators,
@@ -35,6 +39,7 @@ const Demo = () => {
 
   // Keep ref in sync
   useEffect(() => { stopFillerRef.current = stopFiller; }, [stopFiller]);
+  useEffect(() => { onFirstSpeechEndRef.current = onFirstSpeechEnd; }, [onFirstSpeechEnd]);
 
   useEffect(() => {
     const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
