@@ -46,7 +46,7 @@ const Demo = () => {
     onUserSpeechEnd: handleUserSpeechEnd,
   });
 
-  const { fillerEnabled, setFillerEnabled, stopFiller, onFirstSpeechEnd } = useFillerPlayback({
+  const { fillerEnabled, setFillerEnabled, stopFiller, onFirstSpeechEnd, warmUpAudio } = useFillerPlayback({
     voiceName: config.voiceName,
     status,
     sessionIndicators,

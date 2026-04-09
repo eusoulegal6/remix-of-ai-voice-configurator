@@ -348,5 +348,5 @@ export function useFillerPlayback({
     return () => stopFiller("unmount_cleanup");
   }, [stopFiller]);
 
-  return { fillerEnabled: enabled, setFillerEnabled: setEnabled, stopFiller, onFirstSpeechEnd };
+  return { fillerEnabled: enabled, setFillerEnabled: setEnabled, stopFiller, onFirstSpeechEnd, warmUpAudio };
 }
