@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useGeminiAudio } from "@/hooks/useGeminiAudio";
+import { useFillerPlayback } from "@/hooks/useFillerPlayback";
 import TestingArea from "@/components/TestingArea";
 import ConfigSection from "@/components/ConfigSection";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const Demo = () => {
   const [config, setConfig] = useState({
@@ -17,6 +20,12 @@ const Demo = () => {
     model: config.model,
     systemInstructions: config.systemInstructions,
     voiceName: config.voiceName,
+  });
+
+  const { fillerEnabled, setFillerEnabled } = useFillerPlayback({
+    voiceName: config.voiceName,
+    status,
+    sessionIndicators,
   });
 
   useEffect(() => {
@@ -37,6 +46,16 @@ const Demo = () => {
             Back
           </Link>
         </Button>
+      </div>
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <Label htmlFor="filler-toggle" className="text-xs text-muted-foreground cursor-pointer">
+          Filler audio
+        </Label>
+        <Switch
+          id="filler-toggle"
+          checked={fillerEnabled}
+          onCheckedChange={setFillerEnabled}
+        />
       </div>
       <TestingArea
         status={status}
