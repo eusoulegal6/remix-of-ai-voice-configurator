@@ -1,6 +1,6 @@
 import { Mic, MicOff, RefreshCw, ShieldCheck, Volume2, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import InstallPrompt from "@/components/InstallPrompt";
+
 import type {
   ConnectionStatus,
   PermissionState,
@@ -107,7 +107,7 @@ const TestingArea = ({
         </span>
       </div>
 
-      <InstallPrompt />
+      
     </main>
   );
 };
