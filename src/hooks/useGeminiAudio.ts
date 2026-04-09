@@ -106,6 +106,8 @@ interface UseGeminiAudioOptions {
   voiceName: string;
   /** Optional callback fired once when the user starts speaking (non-silent mic frames detected). */
   onUserSpeech?: () => void;
+  /** Optional callback fired when a speech burst ends (transition from non-silent to silent frames). */
+  onUserSpeechEnd?: () => void;
 }
 
 type DisconnectIntent = "none" | "manual" | "lifecycle" | "cleanup" | "error";
@@ -125,7 +127,7 @@ const INITIAL_SESSION_INDICATORS: SessionIndicators = {
   },
 };
 
-export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpeech }: UseGeminiAudioOptions) {
+export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpeech, onUserSpeechEnd }: UseGeminiAudioOptions) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [sessionIndicators, setSessionIndicators] = useState<SessionIndicators>(INITIAL_SESSION_INDICATORS);
@@ -147,10 +149,12 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
   const isBackpressuredRef = useRef(false);
   const droppedChunksRef = useRef(0);
   const onUserSpeechRef = useRef(onUserSpeech);
+  const onUserSpeechEndRef = useRef(onUserSpeechEnd);
   const userIsSpeakingRef = useRef(false);
 
-  // Keep the callback ref in sync without causing re-renders
+  // Keep the callback refs in sync without causing re-renders
   useEffect(() => { onUserSpeechRef.current = onUserSpeech; }, [onUserSpeech]);
+  useEffect(() => { onUserSpeechEndRef.current = onUserSpeechEnd; }, [onUserSpeechEnd]);
 
   const addLog = useCallback((message: string, type: LogEntry["type"] = "info") => {
     setLogs((prev) => [...prev, { timestamp: new Date(), message, type }]);
@@ -418,7 +422,10 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
         }
       }
       if (isSilent) {
-        userIsSpeakingRef.current = false;
+        if (userIsSpeakingRef.current) {
+          userIsSpeakingRef.current = false;
+          onUserSpeechEndRef.current?.();
+        }
         return;
       }
 
