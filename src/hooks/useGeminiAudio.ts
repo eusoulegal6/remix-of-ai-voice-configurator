@@ -316,6 +316,10 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
     isBackpressuredRef.current = false;
     droppedChunksRef.current = 0;
     userIsSpeakingRef.current = false;
+    if (speechEndTimerRef.current !== null) {
+      window.clearTimeout(speechEndTimerRef.current);
+      speechEndTimerRef.current = null;
+    }
     interruptPlayback();
 
     if (processorRef.current) {
@@ -423,11 +427,23 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
         }
       }
       if (isSilent) {
-        if (userIsSpeakingRef.current) {
-          userIsSpeakingRef.current = false;
-          onUserSpeechEndRef.current?.();
+        // Start a debounce timer — only fire onUserSpeechEnd after 350ms of sustained silence
+        if (userIsSpeakingRef.current && speechEndTimerRef.current === null) {
+          speechEndTimerRef.current = window.setTimeout(() => {
+            speechEndTimerRef.current = null;
+            if (userIsSpeakingRef.current) {
+              userIsSpeakingRef.current = false;
+              onUserSpeechEndRef.current?.();
+            }
+          }, 350);
         }
         return;
+      }
+
+      // Non-silent frame: cancel any pending speech-end timer
+      if (speechEndTimerRef.current !== null) {
+        window.clearTimeout(speechEndTimerRef.current);
+        speechEndTimerRef.current = null;
       }
 
       // Fire onUserSpeech once per speech burst (non-silent → first frame only)
