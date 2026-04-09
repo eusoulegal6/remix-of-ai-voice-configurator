@@ -421,13 +421,13 @@ export function useGeminiAudio({ model, systemInstructions, voiceName, onUserSpe
 
       if (!rawFloat32) return;
 
-      let isSilent = true;
+      // Compute RMS energy to distinguish real speech from background noise
+      let sumSq = 0;
       for (let i = 0; i < rawFloat32.length; i++) {
-        if (rawFloat32[i] !== 0) {
-          isSilent = false;
-          break;
-        }
+        sumSq += rawFloat32[i] * rawFloat32[i];
       }
+      const rms = Math.sqrt(sumSq / rawFloat32.length);
+      const isSilent = rms < SILENCE_RMS_THRESHOLD;
       if (isSilent) {
         // Start a debounce timer — only fire onUserSpeechEnd after sustained silence
         if (userIsSpeakingRef.current && speechEndTimerRef.current === null) {
