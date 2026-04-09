@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useGeminiAudio } from "@/hooks/useGeminiAudio";
@@ -16,17 +16,25 @@ const Demo = () => {
     voiceName: "Kore",
   });
 
+  // Stable ref so useGeminiAudio's callback always calls the latest stopFiller
+  const stopFillerRef = useRef<() => void>(() => {});
+  const handleUserSpeech = useCallback(() => stopFillerRef.current(), []);
+
   const { status, logs, sessionIndicators, start, stop, retry } = useGeminiAudio({
     model: config.model,
     systemInstructions: config.systemInstructions,
     voiceName: config.voiceName,
+    onUserSpeech: handleUserSpeech,
   });
 
-  const { fillerEnabled, setFillerEnabled } = useFillerPlayback({
+  const { fillerEnabled, setFillerEnabled, stopFiller } = useFillerPlayback({
     voiceName: config.voiceName,
     status,
     sessionIndicators,
   });
+
+  // Keep ref in sync
+  useEffect(() => { stopFillerRef.current = stopFiller; }, [stopFiller]);
 
   useEffect(() => {
     const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
